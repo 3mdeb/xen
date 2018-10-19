@@ -10,14 +10,15 @@ INSTALL_LOG = build/installed_files.txt
 all: build
 .PHONY: build
 build:
-	CC="$(CC)" CFLAGS="$(PY_CFLAGS)" $(PYTHON) setup.py build
+	CC="$(CC)" CFLAGS="$(PY_CFLAGS)" $(PYTHON) setup.py build $(DISTUTILS_BUILD_ARGS)
 
 .PHONY: install
 install: all
 	$(INSTALL_DIR) $(DESTDIR)/$(bindir)
 	CC="$(CC)" CFLAGS="$(PY_CFLAGS)" LDFLAGS="$(PY_LDFLAGS)" $(PYTHON) \
 		setup.py install --record $(INSTALL_LOG) $(PYTHON_PREFIX_ARG) \
-		 --root="$(DESTDIR)" --install-scripts=$(LIBEXEC_BIN) --force
+		 --root="$(DESTDIR)" --install-scripts=$(LIBEXEC_BIN) --force \
+		 $(DISTUTILS_INSTALL_ARGS)
 	set -e; if [ $(bindir) != $(LIBEXEC_BIN) -a \
 	             "`readlink -f $(DESTDIR)/$(bindir)`" != \
 	             "`readlink -f $(LIBEXEC_BIN)`" ]; then \

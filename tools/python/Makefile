@@ -10,7 +10,7 @@ INSTALL_LOG = build/installed_files.txt
 
 .PHONY: build
 build:
-	CC="$(CC)" CFLAGS="$(PY_CFLAGS)" $(PYTHON) setup.py build
+	CC="$(CC)" CFLAGS="$(PY_CFLAGS)" $(PYTHON) setup.py build $(DISTUTILS_BUILD_ARGS)
 
 .PHONY: install
 install:
@@ -18,7 +18,7 @@ install:
 
 	CC="$(CC)" CFLAGS="$(PY_CFLAGS)" LDFLAGS="$(PY_LDFLAGS)" $(PYTHON) \
 		setup.py install --record $(INSTALL_LOG) $(PYTHON_PREFIX_ARG) \
-		--root="$(DESTDIR)" --force
+		--root="$(DESTDIR)" --force $(DISTUTILS_INSTALL_ARGS)
 
 	$(INSTALL_PROG) scripts/convert-legacy-stream $(DESTDIR)$(LIBEXEC_BIN)
 	$(INSTALL_PROG) scripts/verify-stream-v2 $(DESTDIR)$(LIBEXEC_BIN)
