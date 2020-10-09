@@ -359,6 +359,7 @@ static void __init _alternative_instructions(bool force)
 {
     unsigned int i;
     nmi_callback_t *saved_nmi_callback;
+    uint64_t msr_content;
 
     /*
      * Don't stop machine check exceptions while patching.
@@ -381,6 +382,15 @@ static void __init _alternative_instructions(bool force)
      * even an NMI ahead of our explicit self-NMI.
      */
     saved_nmi_callback = set_nmi_callback(nmi_apply_alternatives);
+
+    /* Check is R_INIT bit set to determinate if xen was run by SKINIT */
+    rdmsrl(MSR_K8_VM_CR, msr_content);
+    if(msr_content & K8_VMCR_R_INIT)
+    {
+        printk(KERN_INFO "K8_VMCR_R_INIT is set \n");
+        msr_content &= ~K8_VMCR_R_INIT;
+        wrmsrl(MSR_K8_VM_CR, msr_content);
+    }
 
     /* Send ourselves an NMI to trigger the callback. */
     self_nmi();

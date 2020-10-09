@@ -257,6 +257,8 @@
 /* MSR_K8_VM_CR bits: */
 #define _K8_VMCR_SVME_DISABLE		4
 #define K8_VMCR_SVME_DISABLE		(1 << _K8_VMCR_SVME_DISABLE)
+#define _K8_VMCR_R_INIT          1
+#define K8_VMCR_R_INIT           (1 << _K8_VMCR_R_INIT)
 
 /* AMD64 MSRs */
 #define MSR_AMD64_NB_CFG		0xc001001f
