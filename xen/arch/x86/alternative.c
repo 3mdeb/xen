@@ -375,19 +375,28 @@ static void __init _alternative_instructions(bool force)
      * patching.
      */
 
-    /* Check is R_INIT bit set to determinate if xen was run by SKINIT */
-    rdmsrl(MSR_K8_VM_CR, msr_content);
-    if(msr_content & K8_VMCR_R_INIT)
+    /* 
+     * 12th bit in ECX register for CPUID function numbered 8000_0001h
+     * indicates support for SKINIT. The clearing INIT_R and calling
+     * the STIG before self-NMI should be provided only for CPUs with SKINIT
+     * support.
+     */
+    if (cpuid_ecx(0x80000001) & 0x1000)
     {
-        printk(KERN_INFO "K8_VMCR_R_INIT is set \n");
+        /* Check is R_INIT bit set to determinate if xen was run by SKINIT */
+        rdmsrl(MSR_K8_VM_CR, msr_content);
+        if (msr_content & K8_VMCR_R_INIT)
+        {
+            printk(KERN_INFO "K8_VMCR_R_INIT is set \n");
 
-        /* Clear INIT_R*/
-        msr_content &= ~K8_VMCR_R_INIT;
-        wrmsrl(MSR_K8_VM_CR, msr_content);
+            /* Clear INIT_R*/
+            msr_content &= ~K8_VMCR_R_INIT;
+            wrmsrl(MSR_K8_VM_CR, msr_content);
 
-        /* Set GIF flag */
-        svm_stgi();
-        printk(KERN_INFO "GIF is set \n");
+            /* Set GIF flag */
+            svm_stgi();
+            printk(KERN_INFO "GIF is set \n");
+        }
     }
 
     ASSERT(!local_irq_is_enabled());
