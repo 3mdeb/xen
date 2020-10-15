@@ -36,6 +36,13 @@ static inline void svm_vmsave_pa(paddr_t vmcb)
         : : "a" (vmcb) : "memory" );
 }
 
+static inline void svm_stgi(void)
+{
+    asm volatile (
+        ".byte 0x0f,0x01,0xdc" /* STGI */
+        : : : "memory" );
+}
+
 static inline void svm_invlpga(unsigned long linear, uint32_t asid)
 {
     asm volatile (
