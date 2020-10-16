@@ -47,6 +47,9 @@
 #include <asm/tboot.h>
 #include <irq_vectors.h>
 #include <mach_apic.h>
+#include <asm/hvm/svm/svm.h>
+
+extern bool __xen_run_by_SKINIT;
 
 unsigned long __read_mostly trampoline_phys;
 
@@ -413,6 +416,8 @@ void start_secondary(void *unused)
 
     /* We can take interrupts now: we're officially "up". */
     local_irq_enable();
+    if (__xen_run_by_SKINIT)
+        svm_stgi();
     mtrr_ap_init();
 
     startup_cpu_idle_loop();
@@ -431,49 +436,52 @@ static int wakeup_secondary_cpu(int phys_apicid, unsigned long start_eip)
     apic_write(APIC_ESR, 0);
     apic_read(APIC_ESR);
 
-    Dprintk("Asserting INIT.\n");
-
-    /*
-     * Turn INIT on target chip via IPI
-     */
-    apic_icr_write(APIC_INT_LEVELTRIG | APIC_INT_ASSERT | APIC_DM_INIT,
-                   phys_apicid);
-
-    if ( !x2apic_enabled )
+    if (!__xen_run_by_SKINIT)
     {
-        Dprintk("Waiting for send to finish...\n");
-        timeout = 0;
-        do {
-            Dprintk("+");
-            udelay(100);
-            send_status = apic_read(APIC_ICR) & APIC_ICR_BUSY;
-        } while ( send_status && (timeout++ < 1000) );
+        Dprintk("Asserting INIT.\n");
 
-        mdelay(10);
-
-        Dprintk("Deasserting INIT.\n");
-
-        apic_icr_write(APIC_INT_LEVELTRIG | APIC_DM_INIT, phys_apicid);
-
-        Dprintk("Waiting for send to finish...\n");
-        timeout = 0;
-        do {
-            Dprintk("+");
-            udelay(100);
-            send_status = apic_read(APIC_ICR) & APIC_ICR_BUSY;
-        } while ( send_status && (timeout++ < 1000) );
-    }
-    else if ( tboot_in_measured_env() )
-    {
         /*
-         * With tboot AP is actually spinning in a mini-guest before
-         * receiving INIT. Upon receiving INIT ipi, AP need time to VMExit,
-         * update VMCS to tracking SIPIs and VMResume.
-         *
-         * While AP is in root mode handling the INIT the CPU will drop
-         * any SIPIs
-         */
-        udelay(10);
+        * Turn INIT on target chip via IPI
+        */
+        apic_icr_write(APIC_INT_LEVELTRIG | APIC_INT_ASSERT | APIC_DM_INIT,
+                    phys_apicid);
+
+        if ( !x2apic_enabled )
+        {
+            Dprintk("Waiting for send to finish...\n");
+            timeout = 0;
+            do {
+                Dprintk("+");
+                udelay(100);
+                send_status = apic_read(APIC_ICR) & APIC_ICR_BUSY;
+            } while ( send_status && (timeout++ < 1000) );
+
+            mdelay(10);
+
+            Dprintk("Deasserting INIT.\n");
+
+            apic_icr_write(APIC_INT_LEVELTRIG | APIC_DM_INIT, phys_apicid);
+
+            Dprintk("Waiting for send to finish...\n");
+            timeout = 0;
+            do {
+                Dprintk("+");
+                udelay(100);
+                send_status = apic_read(APIC_ICR) & APIC_ICR_BUSY;
+            } while ( send_status && (timeout++ < 1000) );
+        }
+        else if ( tboot_in_measured_env() )
+        {
+            /*
+            * With tboot AP is actually spinning in a mini-guest before
+            * receiving INIT. Upon receiving INIT ipi, AP need time to VMExit,
+            * update VMCS to tracking SIPIs and VMResume.
+            *
+            * While AP is in root mode handling the INIT the CPU will drop
+            * any SIPIs
+            */
+            udelay(10);
+        }
     }
 
     maxlvt = get_maxlvt();

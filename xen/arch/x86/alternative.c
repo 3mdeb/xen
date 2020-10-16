@@ -32,6 +32,7 @@
 #define MAX_PATCH_LEN (255-1)
 
 extern struct alt_instr __alt_instructions[], __alt_instructions_end[];
+bool __xen_run_by_SKINIT = false;
 
 #ifdef K8_NOP1
 static const unsigned char k8nops[] init_or_livepatch_const = {
@@ -353,7 +354,6 @@ static int __init nmi_apply_alternatives(const struct cpu_user_regs *regs,
     return 1;
 }
 
-
 /*
  * This routine is called with local interrupt disabled and used during
  * bootup.
@@ -383,11 +383,14 @@ static void __init _alternative_instructions(bool force)
      */
     if (cpuid_ecx(0x80000001) & 0x1000)
     {
-        /* Check is R_INIT bit set to determinate if xen was run by SKINIT */
+        /*
+        * Check is R_INIT bit set to determinate if xen was run by SKINIT 
+        */
         rdmsrl(MSR_K8_VM_CR, msr_content);
         if (msr_content & K8_VMCR_R_INIT)
         {
-            printk(KERN_INFO "K8_VMCR_R_INIT is set \n");
+            printk(KERN_INFO "Xen was run by SKINIT \n");
+            __xen_run_by_SKINIT = true;
 
             /* Clear INIT_R*/
             msr_content &= ~K8_VMCR_R_INIT;
@@ -398,7 +401,6 @@ static void __init _alternative_instructions(bool force)
             printk(KERN_INFO "GIF is set \n");
         }
     }
-
     ASSERT(!local_irq_is_enabled());
 
     /* Set what operation to perform /before/ setting the callback. */
