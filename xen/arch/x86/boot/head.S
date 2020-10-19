@@ -208,11 +208,11 @@ __efi64_mb2_start:
          * by the bootloader below 4 GiB. Hence, we can safely truncate
          * addresses to 32-bits in most cases below.
          */
-
         cld
 
         /* VGA is not available on EFI platforms. */
         movl   $0,vga_text_buffer(%rip)
+        jmp bad_cpu
 
         /* Check for Multiboot2 bootloader. */
         cmp     $MULTIBOOT2_BOOTLOADER_MAGIC,%eax
