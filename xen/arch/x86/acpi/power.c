@@ -178,7 +178,7 @@ static void acpi_sleep_prepare(u32 state)
         acpi_sinfo.wakeup_vector, sizeof(uint64_t));
 
     /* TBoot will set resume vector itself (when it is safe to do so). */
-    if ( tboot_in_measured_env() )
+    if ( ap_boot_method == AP_BOOT_TXT )
         return;
 
     if ( acpi_sinfo.vector_width == 32 )
@@ -449,7 +449,7 @@ acpi_status acpi_enter_sleep_state(u8 sleep_state)
 {
     acpi_status status;
 
-    if ( tboot_in_measured_env() )
+    if ( ap_boot_method == AP_BOOT_TXT )
     {
         tboot_sleep(sleep_state);
         printk(XENLOG_ERR "TBOOT failed entering s3 state\n");

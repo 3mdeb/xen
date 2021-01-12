@@ -49,6 +49,7 @@
 #include <mach_apic.h>
 
 unsigned long __read_mostly trampoline_phys;
+enum ap_boot_method ap_boot_method = AP_BOOT_NORMAL;
 
 /* representing HT siblings of each logical CPU */
 DEFINE_PER_CPU_READ_MOSTLY(cpumask_var_t, cpu_sibling_mask);
@@ -432,48 +433,63 @@ static int wakeup_secondary_cpu(int phys_apicid, unsigned long start_eip)
     apic_read(APIC_ESR);
 
     Dprintk("Asserting INIT.\n");
-
-    /*
-     * Turn INIT on target chip via IPI
-     */
-    apic_icr_write(APIC_INT_LEVELTRIG | APIC_INT_ASSERT | APIC_DM_INIT,
-                   phys_apicid);
-
-    if ( !x2apic_enabled )
+    switch ( ap_boot_method )
     {
-        Dprintk("Waiting for send to finish...\n");
-        timeout = 0;
-        do {
-            Dprintk("+");
-            udelay(100);
-            send_status = apic_read(APIC_ICR) & APIC_ICR_BUSY;
-        } while ( send_status && (timeout++ < 1000) );
-
-        mdelay(10);
-
-        Dprintk("Deasserting INIT.\n");
-
-        apic_icr_write(APIC_INT_LEVELTRIG | APIC_DM_INIT, phys_apicid);
-
-        Dprintk("Waiting for send to finish...\n");
-        timeout = 0;
-        do {
-            Dprintk("+");
-            udelay(100);
-            send_status = apic_read(APIC_ICR) & APIC_ICR_BUSY;
-        } while ( send_status && (timeout++ < 1000) );
-    }
-    else if ( tboot_in_measured_env() )
-    {
+    case AP_BOOT_SKINIT:
         /*
-         * With tboot AP is actually spinning in a mini-guest before
-         * receiving INIT. Upon receiving INIT ipi, AP need time to VMExit,
-         * update VMCS to tracking SIPIs and VMResume.
-         *
-         * While AP is in root mode handling the INIT the CPU will drop
-         * any SIPIs
+         * After SKINIT APs are already in wait-for-SIPI state and
+         * sending another INIT would break security.
          */
+        Dprintk("SKINIT boot. Skipping INIT.\n");
+        break;
+    case AP_BOOT_NORMAL:
+        /*
+        * Turn INIT on target chip via IPI
+        */
+        apic_icr_write(APIC_INT_LEVELTRIG | APIC_INT_ASSERT | APIC_DM_INIT,
+                    phys_apicid);
+
+        if ( !x2apic_enabled )
+        {
+            Dprintk("Waiting for send to finish...\n");
+            timeout = 0;
+            do {
+                Dprintk("+");
+                udelay(100);
+                send_status = apic_read(APIC_ICR) & APIC_ICR_BUSY;
+            } while ( send_status && (timeout++ < 1000) );
+
+            mdelay(10);
+
+            Dprintk("Deasserting INIT.\n");
+
+            apic_icr_write(APIC_INT_LEVELTRIG | APIC_DM_INIT, phys_apicid);
+
+            Dprintk("Waiting for send to finish...\n");
+            timeout = 0;
+            do {
+                Dprintk("+");
+                udelay(100);
+                send_status = apic_read(APIC_ICR) & APIC_ICR_BUSY;
+            } while ( send_status && (timeout++ < 1000) );
+        }
+        break;
+    case AP_BOOT_TXT:
+        /*
+         * Turn INIT on target chip via IPI
+         */
+        apic_icr_write(APIC_INT_LEVELTRIG | APIC_INT_ASSERT | APIC_DM_INIT,
+                    phys_apicid);
+        /*
+        * With tboot AP is actually spinning in a mini-guest before
+        * receiving INIT. Upon receiving INIT ipi, AP need time to VMExit,
+        * update VMCS to tracking SIPIs and VMResume.
+        *
+        * While AP is in root mode handling the INIT the CPU will drop
+        * any SIPIs
+        */
         udelay(10);
+        break;
     }
 
     maxlvt = get_maxlvt();
@@ -570,7 +586,7 @@ static int do_boot_cpu(int apicid, int cpu)
     set_cpu_state(CPU_STATE_INIT);
 
     /* Starting actual IPI sequence... */
-    if ( !tboot_in_measured_env() || tboot_wake_ap(apicid, start_eip) )
+    if ( !(ap_boot_method == AP_BOOT_TXT) || tboot_wake_ap(apicid, start_eip) )
         boot_error = wakeup_secondary_cpu(apicid, start_eip);
 
     if ( !boot_error )
