@@ -835,6 +835,41 @@ void load_system_tables(void)
 }
 
 /*
+ * clr_initr_stgi() Sets global interrupt flag (GIF) when the CPU was
+ * initialized with AMD SKINIT. Also funtion clears the VM_CR_INIT_REDIRECTION
+ * bit, which indicates that the CPU was initialized with AMD SKINIT and sets
+ * AP_BOOT_SKINIT AP startup sequence
+ */
+static void clr_initr_stgi(void)
+{
+	uint64_t msr_content;
+
+	if ( !cpu_has_skinit )
+		return;
+
+	/*
+	 * Check is VM_CR_INIT_REDIRECTION bit set to determinate
+	 * if xen was run by SKINIT
+	 */
+	if ( rdmsr_safe(MSR_K8_VM_CR, msr_content) ||
+		!(msr_content & VM_CR_INIT_REDIRECTION) )
+		return;
+
+	/*
+	 * It is necessery to clear VM_CR_INIT_REDIRECTION before stgi
+	 * to prevent turning pending INIT into security exception (#SX).
+	 * It would cause a panic with an unknown exception.
+	 */
+	ap_boot_method = AP_BOOT_SKINIT;
+	msr_content &= ~VM_CR_INIT_REDIRECTION;
+	wrmsr_safe(MSR_K8_VM_CR, msr_content);
+
+	/* Set GIF flag */
+	asm volatile ( ".byte 0x0f,0x01,0xdc" : : : "memory" );
+
+}
+
+/*
  * cpu_init() initializes state that is per-CPU. Some data is already
  * initialized (naturally) in the bootstrap process, such as the GDT
  * and IDT. We reload them nevertheless, this function acts as a
@@ -864,6 +899,14 @@ void cpu_init(void)
 	write_debugreg(3, 0);
 	write_debugreg(6, X86_DR6_DEFAULT);
 	write_debugreg(7, X86_DR7_DEFAULT);
+
+
+	/*
+	 * When the CPU is initialised by AMD SKINIT, GIF is clear to
+	 * prevent external interrupts interfering with secure startup.
+	 * Re-enable all interrupts now that we are suitably set up.
+	 */
+	clr_initr_stgi();
 
 	/* Enable NMIs.  Our loader (e.g. Tboot) may have left them disabled. */
 	enable_nmis();
