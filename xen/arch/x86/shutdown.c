@@ -589,7 +589,7 @@ void machine_restart(unsigned int delay_millisecs)
 
     mdelay(delay_millisecs);
 
-    if ( tboot_in_measured_env() )
+    if ( ap_boot_method == AP_BOOT_TXT )
     {
         acpi_dmar_reinstate();
         tboot_shutdown(TB_SHUTDOWN_REBOOT);

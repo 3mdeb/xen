@@ -139,6 +139,9 @@ void __init tboot_probe(void)
     tboot_copy_memory((unsigned char *)&sinit_size, sizeof(sinit_size),
                       TXT_PUB_CONFIG_REGS_BASE + TXTCR_SINIT_SIZE);
     clear_fixmap(FIX_TBOOT_MAP_ADDRESS);
+
+    /* Set AP TXT boot sequence */
+    ap_boot_method = AP_BOOT_TXT;
 }
 
 /* definitions from xen/drivers/passthrough/vtd/iommu.h
@@ -413,16 +416,11 @@ void tboot_shutdown(uint32_t shutdown_type)
     BUG(); /* should not reach here */
 }
 
-int tboot_in_measured_env(void)
-{
-    return (g_tboot_shared != NULL);
-}
-
 int __init tboot_protect_mem_regions(void)
 {
     int rc;
 
-    if ( !tboot_in_measured_env() )
+    if ( !(ap_boot_method == AP_BOOT_TXT) )
         return 1;
 
     /* TXT Heap */
@@ -462,7 +460,7 @@ int __init tboot_parse_dmar_table(acpi_table_handler dmar_handler)
     sinit_mle_data_t sinit_mle_data;
     void *dmar_table;
 
-    if ( !tboot_in_measured_env() )
+    if ( !(ap_boot_method == AP_BOOT_TXT) )
         return acpi_table_parse(ACPI_SIG_DMAR, dmar_handler);
 
     /* ACPI tables may not be DMA protected by tboot, so use DMAR copy */
@@ -507,7 +505,7 @@ static vmac_t orig_mac, resume_mac;
 
 int tboot_s3_resume(void)
 {
-    if ( !tboot_in_measured_env() )
+    if ( !(ap_boot_method == AP_BOOT_TXT) )
         return 0;
 
     /* need to do these in reverse order of shutdown */
@@ -533,7 +531,7 @@ void tboot_s3_error(int error)
 {
     const char *what = "???";
 
-    BUG_ON(!error || !tboot_in_measured_env());
+    BUG_ON(!error || !(ap_boot_method == AP_BOOT_TXT));
 
     switch ( error )
     {
