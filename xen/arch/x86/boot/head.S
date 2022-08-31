@@ -47,6 +47,28 @@ ENTRY(start)
         jmp     __start
 
         .balign 4
+
+
+/*.globl mle_header*/
+mle_header:
+        .long	0x9082ac5a  /* UUID0 */
+        .long	0x74a7476f  /* UUID1 */
+        .long	0xa2555c0f  /* UUID2 */
+        .long	0x42b651cb  /* UUID3 */
+        .long   0x00000034  /* MLE header size */
+        .long	0x00020002  /* MLE version 2.2 */
+        .long   sl_stub_entry  /* Linear entry point of MLE (virt. address) */
+        .long   0x00000000  /* First valid page of MLE */
+        .long   0x00000000  /* Offset within binary of first byte of MLE */
+        .long   0x00000000  /* Offset within binary of last byte + 1 of MLE */
+        .long   0x00000000  /* Bit vector of MLE-supported capabilities */
+        .long   0x00000000  /* Starting linear address of command line (unused) */
+        .long   0x00000000  /* Ending linear address of command line (unused) */
+
+        .size mle_header, .-mle_header
+        .type mle_header, @object
+
+
 multiboot1_header:             /*** MULTIBOOT1 HEADER ****/
 #define MULTIBOOT_HEADER_FLAGS (MULTIBOOT_HEADER_MODS_ALIGNED | \
                                 MULTIBOOT_HEADER_WANT_MEMORY)
