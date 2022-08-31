@@ -113,6 +113,25 @@ multiboot2_header:
         .size multiboot2_header, . - multiboot2_header
         .type multiboot2_header, @object
 
+        .balign 16
+mle_header:
+        .long	0x9082ac5a  /* UUID0 */
+        .long	0x74a7476f  /* UUID1 */
+        .long	0xa2555c0f  /* UUID2 */
+        .long	0x42b651cb  /* UUID3 */
+        .long   0x00000034  /* MLE header size */
+        .long	0x00020002  /* MLE version 2.2 */
+        .long   sym_offs(sl_stub_entry)  /* Linear entry point of MLE (virt. address) */
+        .long   0x00000000  /* First valid page of MLE */
+        .long   0x00000000  /* Offset within binary of first byte of MLE */
+        .long   0x00000000  /* Offset within binary of last byte + 1 of MLE */
+        .long   0x00000223  /* Bit vector of MLE-supported capabilities */
+        .long   0x00000000  /* Starting linear address of command line (unused) */
+        .long   0x00000000  /* Ending linear address of command line (unused) */
+
+        .size mle_header, .-mle_header
+        .type mle_header, @object
+
         .section .init.rodata, "a", @progbits
 
 .Lbad_cpu_msg: .asciz "ERR: Not a 64-bit CPU!"
@@ -377,6 +396,11 @@ cs32_switch:
 
         /* Jump to earlier loaded address. */
         jmp     *%edi
+
+
+sl_stub_entry:
+
+        jmp __start
 
 #ifdef CONFIG_PVH_GUEST
 ELFNOTE(Xen, XEN_ELFNOTE_PHYS32_ENTRY, .long sym_offs(__pvh_start))
