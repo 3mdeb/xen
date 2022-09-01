@@ -46,7 +46,7 @@
 ENTRY(start)
         jmp     __start
 
-        .balign 4
+
 
 
 /*.globl mle_header*/
@@ -57,7 +57,7 @@ mle_header:
         .long	0x42b651cb  /* UUID3 */
         .long   0x00000034  /* MLE header size */
         .long	0x00020002  /* MLE version 2.2 */
-        .long   sl_stub_entry  /* Linear entry point of MLE (virt. address) */
+        .long   sym_offs(sl_stub_entry)  /* Linear entry point of MLE (virt. address) */
         .long   0x00000000  /* First valid page of MLE */
         .long   0x00000000  /* Offset within binary of first byte of MLE */
         .long   0x00000000  /* Offset within binary of last byte + 1 of MLE */
@@ -68,7 +68,7 @@ mle_header:
         .size mle_header, .-mle_header
         .type mle_header, @object
 
-
+        .balign 4
 multiboot1_header:             /*** MULTIBOOT1 HEADER ****/
 #define MULTIBOOT_HEADER_FLAGS (MULTIBOOT_HEADER_MODS_ALIGNED | \
                                 MULTIBOOT_HEADER_WANT_MEMORY)
@@ -399,6 +399,11 @@ cs32_switch:
 
         /* Jump to earlier loaded address. */
         jmp     *%edi
+
+
+sl_stub_entry:
+
+        jmp __start
 
 #ifdef CONFIG_PVH_GUEST
 ELFNOTE(Xen, XEN_ELFNOTE_PHYS32_ENTRY, .long sym_offs(__pvh_start))

@@ -1,5 +1,4 @@
 obj-bin-y += head.o
-obj-bin-y += sl_stub.o
 
 head-bin-objs := cmdline.o reloc.o
 
