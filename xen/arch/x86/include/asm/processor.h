@@ -275,7 +275,7 @@ static inline unsigned long read_cr0(void)
     unsigned long cr0;
     asm volatile ( "mov %%cr0,%0\n\t" : "=r" (cr0) );
     return cr0;
-} 
+}
 
 static inline void write_cr0(unsigned long val)
 {
@@ -343,12 +343,12 @@ static inline void write_cr4(unsigned long val)
 }
 
 /* Clear and set 'TS' bit respectively */
-static inline void clts(void) 
+static inline void clts(void)
 {
     asm volatile ( "clts" );
 }
 
-static inline void stts(void) 
+static inline void stts(void)
 {
     write_cr0(X86_CR0_TS|read_cr0());
 }
@@ -634,6 +634,7 @@ void set_in_mcu_opt_ctrl(uint32_t mask, uint32_t val);
 enum ap_boot_method {
     AP_BOOT_NORMAL,
     AP_BOOT_SKINIT,
+    AP_BOOT_GETSEC_WAKEUP,
 };
 extern enum ap_boot_method ap_boot_method;
 
