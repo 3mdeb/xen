@@ -55,6 +55,7 @@
 #include <asm/guest.h>
 #include <asm/microcode.h>
 #include <asm/pv/domain.h>
+#include <asm/intel_txt.h>
 
 /* opt_nosmp: If true, secondary processors are ignored. */
 static bool __initdata opt_nosmp;
@@ -71,6 +72,8 @@ boolean_param("smt", opt_smt);
 static bool __initdata opt_invpcid = true;
 boolean_param("invpcid", opt_invpcid);
 bool __read_mostly use_invpcid;
+
+unsigned long __initdata sl_status;
 
 unsigned long __read_mostly cr4_pv32_mask;
 
@@ -1142,6 +1145,9 @@ void __init noreturn __start_xen(unsigned long mbi_p)
 
     /* Sanitise the raw E820 map to produce a final clean version. */
     max_page = raw_max_page = init_e820(memmap_type, &e820_raw);
+
+    if ( sl_status )
+        protect_txt_mem_regions();
 
     if ( !efi_enabled(EFI_BOOT) && e820_raw.nr_map >= 1 )
     {
