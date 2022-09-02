@@ -8,6 +8,7 @@
 #include <asm/msr-index.h>
 #include <asm/cpufeature.h>
 #include <public/elfnote.h>
+#include <asm/slaunch.h>
 
         .section .text.header, "ax", @progbits
         .code32
@@ -401,6 +402,7 @@ cs32_switch:
         /* Jump to earlier loaded address. */
         jmp     *%edi
 
+<<<<<<< HEAD
 
 sl_stub_entry:
 
@@ -414,6 +416,8 @@ sl_stub_entry:
 
         jmp __start
 
+=======
+>>>>>>> 0b28128348 ([WIP] Import slaunch.c, slaunch.h, sl_stub.S from linux)
 #ifdef CONFIG_PVH_GUEST
 ELFNOTE(Xen, XEN_ELFNOTE_PHYS32_ENTRY, .long sym_offs(__pvh_start))
 
@@ -830,3 +834,5 @@ ENTRY(trampoline_start)
 ENTRY(trampoline_end)
 
 #include "x86_64.S"
+
+#include "sl_stub.S"
