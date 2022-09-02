@@ -56,8 +56,6 @@
 #include <asm/microcode.h>
 #include <asm/pv/domain.h>
 
-extern int sl_status;
-
 /* opt_nosmp: If true, secondary processors are ignored. */
 static bool __initdata opt_nosmp;
 boolean_param("nosmp", opt_nosmp);

@@ -133,6 +133,7 @@ mle_header:
         .size mle_header, .-mle_header
         .type mle_header, @object
 
+.globl sl_status
 sl_status:
         .int 0
 
