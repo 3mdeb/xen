@@ -401,6 +401,15 @@ cs32_switch:
 
 sl_stub_entry:
 
+        /*
+	 * Enable SMI with GETSEC[SMCTRL] which were disabled by SENTER.
+	 */
+        pushl    %ebx
+        xorl     %ebx,%ebx
+        movl     $7,%eax
+	getsec
+        popl     %ebx
+
         jmp __start
 
 #ifdef CONFIG_PVH_GUEST
