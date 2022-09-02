@@ -893,6 +893,8 @@ void __init noreturn __start_xen(unsigned long mbi_p)
 
     /* Full exception support from here on in. */
 
+    tboot_protect_mem_regions();
+
     rdmsrl(MSR_EFER, this_cpu(efer));
     asm volatile ( "mov %%cr4,%0" : "=r" (info->cr4) );
 
