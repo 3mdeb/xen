@@ -419,8 +419,10 @@ int __init tboot_protect_mem_regions(void)
 {
     int rc;
 
+    /*
     if ( !tboot_in_measured_env() )
         return 1;
+    */
 
     /* TXT Heap */
     if ( txt_heap_base == 0 )

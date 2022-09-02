@@ -856,7 +856,7 @@ static struct domain *__init create_dom0(const module_t *image,
 /* How much of the directmap is prebuilt at compile time. */
 #define PREBUILT_MAP_LIMIT (1 << L2_PAGETABLE_SHIFT)
 
-void __init noreturn __start_xen(unsigned long mbi_p)
+void __init noreturn __start_xen(unsigned long mbi_p, int tboot_status)
 {
     char *memmap_type = NULL;
     char *cmdline, *kextra, *loader;
@@ -893,7 +893,8 @@ void __init noreturn __start_xen(unsigned long mbi_p)
 
     /* Full exception support from here on in. */
 
-    tboot_protect_mem_regions();
+    if(tboot_status)
+        tboot_protect_mem_regions();
 
     rdmsrl(MSR_EFER, this_cpu(efer));
     asm volatile ( "mov %%cr4,%0" : "=r" (info->cr4) );

@@ -133,6 +133,9 @@ mle_header:
         .size mle_header, .-mle_header
         .type mle_header, @object
 
+tboot_status:
+        .int 0
+
         .section .init.rodata, "a", @progbits
 
 .Lbad_cpu_msg: .asciz "ERR: Not a 64-bit CPU!"
@@ -400,6 +403,9 @@ cs32_switch:
 
 
 sl_stub_entry:
+
+        /* Save information that tboot was used. */
+        mov $1, sym_offs(tboot_status)
 
         jmp __start
 
