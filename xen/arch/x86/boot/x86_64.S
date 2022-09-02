@@ -23,10 +23,6 @@ ENTRY(__high_start)
 
         /* Reload code selector. */
         pushq   $__HYPERVISOR_CS
-
-        mov     sym_offs(tboot_status),%rax
-        pushq   %rax
-
         leaq    1f(%rip),%rax
         pushq   %rax
         lretq

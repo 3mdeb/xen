@@ -133,7 +133,7 @@ mle_header:
         .size mle_header, .-mle_header
         .type mle_header, @object
 
-tboot_status:
+sl_status:
         .int 0
 
         .section .init.rodata, "a", @progbits
@@ -405,7 +405,7 @@ cs32_switch:
 sl_stub_entry:
 
         /* Save information that tboot was used. */
-        mov $1, sym_offs(tboot_status)
+        movl $1, sym_offs(sl_status)
 
         jmp __start
 

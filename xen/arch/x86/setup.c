@@ -56,6 +56,8 @@
 #include <asm/microcode.h>
 #include <asm/pv/domain.h>
 
+extern int sl_status;
+
 /* opt_nosmp: If true, secondary processors are ignored. */
 static bool __initdata opt_nosmp;
 boolean_param("nosmp", opt_nosmp);
@@ -856,7 +858,7 @@ static struct domain *__init create_dom0(const module_t *image,
 /* How much of the directmap is prebuilt at compile time. */
 #define PREBUILT_MAP_LIMIT (1 << L2_PAGETABLE_SHIFT)
 
-void __init noreturn __start_xen(unsigned long mbi_p, int tboot_status)
+void __init noreturn __start_xen(unsigned long mbi_p)
 {
     char *memmap_type = NULL;
     char *cmdline, *kextra, *loader;
@@ -893,7 +895,7 @@ void __init noreturn __start_xen(unsigned long mbi_p, int tboot_status)
 
     /* Full exception support from here on in. */
 
-    if(tboot_status)
+    if(sl_status)
         tboot_protect_mem_regions();
 
     rdmsrl(MSR_EFER, this_cpu(efer));
