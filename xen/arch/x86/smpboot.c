@@ -439,7 +439,7 @@ static int wakeup_secondary_cpu(int phys_apicid, unsigned long start_eip)
      * and Intel TXT Software Development Guide.
      */
     bool send_INIT = ap_boot_method != AP_BOOT_SKINIT
-                  && ap_boot_method == AP_BOOT_GETSEC_WAKEUP;
+                  && ap_boot_method != AP_BOOT_GETSEC_WAKEUP;
 
     /*
      * Some versions of tboot might be able to handle the entire wake sequence
