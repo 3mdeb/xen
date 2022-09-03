@@ -532,6 +532,8 @@ void slaunch_finalize(int do_sexit)
 	//	panic("Error TXT SEXIT must be called on CPU 0\n");
 
 	/* Disable SMX mode */
+	// Code from Linux user cr4_set_bits here, which seems like the opposite of
+	// the intent based on the comment above
 	cr4 = read_cr4();
 	cr4 &= ~X86_CR4_SMXE;
 	write_cr4(cr4);
