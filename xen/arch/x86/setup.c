@@ -1848,7 +1848,7 @@ void __init noreturn __start_xen(unsigned long mbi_p)
 
     iommu_setup();    /* setup iommu if available */
 
-    slaunch_setup_txt();
+    slaunch_setup_txt(&boot_e820);
 
     smp_prepare_cpus();
 

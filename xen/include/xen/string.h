@@ -34,9 +34,6 @@ int memcmp(const void *, const void *, size_t);
 void *memchr(const void *, int, size_t);
 void *memchr_inv(const void *, int, size_t);
 
-void memcpy_fromio(void *to, const volatile void *from, size_t n);
-void memcpy_toio(volatile void *to, const void *from, size_t n);
-
 #include <asm/string.h>
 
 #ifndef __HAVE_ARCH_STRCMP

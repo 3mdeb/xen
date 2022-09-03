@@ -407,7 +407,7 @@ extern uint32_t slaunch_get_cpu_type(void);
 /*
  * External functions avalailable in mainline kernel.
  */
-extern void slaunch_setup_txt(void);
+extern void slaunch_setup_txt(struct e820map *e820);
 extern uint32_t slaunch_get_flags(void);
 extern struct sl_ap_wake_info *slaunch_get_ap_wake_info(void);
 extern struct acpi_table_header *slaunch_get_dmar_table(struct acpi_table_header *dmar);

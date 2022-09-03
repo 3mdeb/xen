@@ -5,17 +5,22 @@
  * Copyright (c) 2022, Oracle and/or its affiliates.
  */
 
+/* various macros from Linux which are missing in Xen */
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #define pr_err(...) printk(XENLOG_ERR __VA_ARGS__)
 #define pr_info(...) printk(XENLOG_INFO __VA_ARGS__)
-
 #define PFN_PHYS(x)	((uint64_t)(x) << PAGE_SHIFT)
-
 #define virt_to_phys(v) ((unsigned long)(v))
+
+
+/* these seem wrong, BUT arch/x86/dmi_scan.c does this */
+#define memcpy_fromio    memcpy
+#define memcpy_toio    memcpy
 
 #include <xen/compiler.h>
 #include <xen/init.h>
 #include <asm/cpufeature.h>
+#include <asm/e820.h>
 #include <asm/processor.h>
 #include <asm/io.h>
 #include <asm/page.h>
@@ -154,7 +159,7 @@ static void __init slaunch_verify_pmrs(void *txt)
 	/* Save a copy */
 	vtd_pmr_lo_size = os_sinit_data->vtd_pmr_lo_size;
 
-	last_pfn = e820__end_of_ram_pfn();
+	last_pfn = e820_find_max_pfn();
 
 	/*
 	 * First make sure the hi PMR covers all memory above 4G. In the
@@ -204,15 +209,16 @@ out:
 		slaunch_txt_reset(txt, errmsg, err);
 }
 
-static void __init slaunch_txt_reserve_range(uint64_t base, uint64_t size)
+static void __init slaunch_txt_reserve_range(struct e820map *e820, uint64_t base, uint64_t size)
 {
-	int type;
+	// int type;
 
-	type = e820__get_entry_type(base, base + size - 1);
-	if (type == E820_TYPE_RAM) {
-		pr_info("memblock reserve base: %lx size: %lx\n", base, size);
-		memblock_reserve(base, size);
-	}
+	// type = e820__get_entry_type(base, base + size - 1);
+	// if (type == E820_RAM) {
+	// 	pr_info("memblock reserve base: %lx size: %lx\n", base, size);
+	// 	memblock_reserve(base, size);
+	// }
+	reserve_e820_ram(e820, base, base + size - 1);
 }
 
 /*
@@ -231,7 +237,7 @@ static void __init slaunch_txt_reserve_range(uint64_t base, uint64_t size)
  * Also if the low PMR doesn't cover all memory < 4G, any RAM regions above
  * the low PMR must be reservered too.
  */
-static void __init slaunch_txt_reserve(void *txt)
+static void __init slaunch_txt_reserve(void *txt, struct e820map *e820)
 {
 	struct txt_sinit_memory_descriptor_record *mdr;
 	struct txt_sinit_mle_data *sinit_mle_data;
@@ -242,15 +248,15 @@ static void __init slaunch_txt_reserve(void *txt)
 
 	base = TXT_PRIV_CONFIG_REGS_BASE;
 	size = TXT_PUB_CONFIG_REGS_BASE - TXT_PRIV_CONFIG_REGS_BASE;
-	slaunch_txt_reserve_range(base, size);
+	slaunch_txt_reserve_range(e820, base, size);
 
 	memcpy_fromio(&heap_base, txt + TXT_CR_HEAP_BASE, sizeof(heap_base));
 	memcpy_fromio(&heap_size, txt + TXT_CR_HEAP_SIZE, sizeof(heap_size));
-	slaunch_txt_reserve_range(heap_base, heap_size);
+	slaunch_txt_reserve_range(e820, heap_base, heap_size);
 
 	memcpy_fromio(&base, txt + TXT_CR_SINIT_BASE, sizeof(base));
 	memcpy_fromio(&size, txt + TXT_CR_SINIT_SIZE, sizeof(size));
-	slaunch_txt_reserve_range(base, size);
+	slaunch_txt_reserve_range(e820, base, size);
 
 	field_offset = offsetof(struct txt_sinit_mle_data,
 				sinit_vtd_dmar_table_size);
@@ -275,14 +281,15 @@ static void __init slaunch_txt_reserve(void *txt)
 	for (i = 0; i < mdrnum; i++, mdr++) {
 		/* Spec says some entries can have length 0, ignore them */
 		if (mdr->type > 0 && mdr->length > 0)
-			slaunch_txt_reserve_range(mdr->address, mdr->length);
+			slaunch_txt_reserve_range(e820, mdr->address, mdr->length);
 	}
 
 	txt_early_put_heap_table(mdrs, mdroffset + mdrslen - 8);
 
 nomdr:
-	slaunch_txt_reserve_range(ap_wake_info.ap_wake_block,
-				  ap_wake_info.ap_wake_block_size);
+	slaunch_txt_reserve_range(e820,
+							  ap_wake_info.ap_wake_block,
+				  			  ap_wake_info.ap_wake_block_size);
 
 	/*
 	 * Earlier checks ensured that the event log was properly situated
@@ -291,16 +298,16 @@ nomdr:
 	 * already reserved.
 	 */
 	if (evtlog_addr < heap_base || evtlog_addr > (heap_base + heap_size))
-		slaunch_txt_reserve_range(evtlog_addr, evtlog_size);
+		slaunch_txt_reserve_range(e820, evtlog_addr, evtlog_size);
 
-	for (i = 0; i < e820_table->nr_entries; i++) {
-		base = e820_table->entries[i].addr;
-		size = e820_table->entries[i].size;
+	for (i = 0; i < e820->nr_map; i++) {
+		base = e820->map[i].addr;
+		size = e820->map[i].size;
 		if ((base >= vtd_pmr_lo_size) && (base < 0x100000000ULL))
-			slaunch_txt_reserve_range(base, size);
+			slaunch_txt_reserve_range(e820, base, size);
 		else if ((base < vtd_pmr_lo_size) &&
 			 (base + size > vtd_pmr_lo_size))
-			slaunch_txt_reserve_range(vtd_pmr_lo_size,
+			slaunch_txt_reserve_range(e820, vtd_pmr_lo_size,
 						  base + size - vtd_pmr_lo_size);
 	}
 }
@@ -381,7 +388,7 @@ static void __init slaunch_fetch_os_mle_fields(void *txt)
 /*
  * Intel TXT specific late stub setup and validation.
  */
-void __init slaunch_setup_txt(void)
+void __init slaunch_setup_txt(struct e820map *e820)
 {
 	uint64_t one = TXT_REGVALUE_ONE, val;
 	void *txt;
@@ -460,7 +467,7 @@ void __init slaunch_setup_txt(void)
 
 	slaunch_verify_pmrs(txt);
 
-	slaunch_txt_reserve(txt);
+	slaunch_txt_reserve(txt, e820);
 
 	slaunch_copy_dmar_table(txt);
 
@@ -512,6 +519,9 @@ void slaunch_finalize(int do_sexit)
 	 * completely re-setup memory management.
 	 */
 
+	// TODO: Comment above is probably not correct on Xen <------------------------------------
+	// but we'll only need to call this while rebooting / shutting down, so no kexec, right?
+
 	/* Map public registers and do a final read fence */
 	config = ioremap(TXT_PUB_CONFIG_REGS_BASE, TXT_NR_CONFIG_PAGES *
 			 PAGE_SIZE);
@@ -527,13 +537,13 @@ void slaunch_finalize(int do_sexit)
 	if (!do_sexit)
 		return;
 
-	// are we always on bsp?
+	// are we always on bsp? <-----------------------------------------------------------------
 	//if (smp_processor_id() != 0)
 	//	panic("Error TXT SEXIT must be called on CPU 0\n");
 
 	/* Disable SMX mode */
-	// Code from Linux user cr4_set_bits here, which seems like the opposite of
-	// the intent based on the comment above
+	// Code from Linux used cr4_set_bits here (which enabled SMX), which seems
+	// like a mistake
 	cr4 = read_cr4();
 	cr4 &= ~X86_CR4_SMXE;
 	write_cr4(cr4);
