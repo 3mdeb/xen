@@ -342,7 +342,7 @@ static int __init copy_e820_map(struct e820entry * biosmap, unsigned int nr_map)
 /*
  * Find the highest page frame number we have available
  */
-static unsigned long __init find_max_pfn(void)
+unsigned long __init e820_find_max_pfn(void)
 {
     unsigned int i;
     unsigned long max_pfn = 0;
@@ -699,5 +699,5 @@ unsigned long __init init_e820(const char *str, struct e820map *raw)
     printk("%s RAM map:\n", str);
     print_e820_memory_map(e820.map, e820.nr_map);
 
-    return find_max_pfn();
+    return e820_find_max_pfn();
 }
