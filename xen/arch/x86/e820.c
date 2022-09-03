@@ -123,7 +123,7 @@ void __init print_e820_memory_map(const struct e820entry *map,
 /*
  * Sanitize the BIOS e820 map.
  *
- * Some e820 responses include overlapping entries.  The following 
+ * Some e820 responses include overlapping entries.  The following
  * replaces the original e820 map with a new one, removing overlaps.
  *
  */
@@ -379,7 +379,7 @@ static void __init clip_to_limit(uint64_t limit, char *warnmsg)
 
         /* If none found, we are done. */
         if ( i == e820.nr_map )
-            break;        
+            break;
 
         old_limit = max_t(
             uint64_t, old_limit, e820.map[i].addr + e820.map[i].size);
@@ -391,7 +391,7 @@ static void __init clip_to_limit(uint64_t limit, char *warnmsg)
             continue;
 
         /*
-         * If the type change fails (e.g., not space in table) then we clip or 
+         * If the type change fails (e.g., not space in table) then we clip or
          * delete the region as appropriate.
          */
         if ( e820.map[i].addr < limit )

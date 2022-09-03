@@ -8,7 +8,10 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #define pr_err(...) printk(XENLOG_ERR __VA_ARGS__)
 #define pr_info(...) printk(XENLOG_INFO __VA_ARGS__)
+
 #define PFN_PHYS(x)	((uint64_t)(x) << PAGE_SHIFT)
+
+#define virt_to_phys(v) ((unsigned long)(v))
 
 #include <xen/compiler.h>
 #include <xen/init.h>
@@ -182,8 +185,8 @@ static void __init slaunch_verify_pmrs(void *txt)
 	 * by the lo PMR. Note this is the decompressed kernel. The ACM would
 	 * have ensured the compressed kernel (the MLE image) was protected.
 	 */
-	if ((__pa_symbol(_end) < 0x100000000ULL) &&
-	    (__pa_symbol(_end) > os_sinit_data->vtd_pmr_lo_size)) {
+	if ((virt_to_phys(RELOC_HIDE((unsigned long)_end, 0)) < 0x100000000ULL) &&
+	    (virt_to_phys(RELOC_HIDE((unsigned long)_end, 0)) > os_sinit_data->vtd_pmr_lo_size)) {
 		err = SL_ERROR_LO_PMR_MLE;
 		errmsg = "Error lo PMR does not cover MLE kernel\n";
 	}
@@ -382,7 +385,7 @@ void __init slaunch_setup_txt(void)
 	uint64_t one = TXT_REGVALUE_ONE, val;
 	void *txt;
 
-	// Let's just ignore this for now
+	// Let's just ignore this for POC
 	//if (!boot_cpu_has(X86_FEATURE_SMX))
 	//	return;
 
