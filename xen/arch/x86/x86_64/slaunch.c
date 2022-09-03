@@ -16,6 +16,7 @@
 #include <xen/compiler.h>
 #include <xen/init.h>
 #include <asm/cpufeature.h>
+#include <asm/processor.h>
 #include <asm/io.h>
 #include <asm/page.h>
 #include <asm/slaunch.h>
@@ -393,8 +394,9 @@ void __init slaunch_setup_txt(void)
 	 * If booted through secure launch entry point, the loadflags
 	 * option will be set.
 	 */
-	if (!(boot_params.hdr.loadflags & SLAUNCH_FLAG))
-		return;
+	// Don't bother checking this for POC
+	//if (!(boot_params.hdr.loadflags & SLAUNCH_FLAG))
+	//	return;
 
 	/*
 	 * See if SENTER was done by reading the status register in the
@@ -476,6 +478,7 @@ static inline void smx_getsec_sexit(void)
 void slaunch_finalize(int do_sexit)
 {
 	uint64_t one = TXT_REGVALUE_ONE, val;
+	uint32_t cr4;
 	void *config;
 
 	if ((slaunch_get_flags() & (SL_FLAG_ACTIVE|SL_FLAG_ARCH_TXT)) !=
@@ -524,11 +527,14 @@ void slaunch_finalize(int do_sexit)
 	if (!do_sexit)
 		return;
 
-	if (smp_processor_id() != 0)
-		panic("Error TXT SEXIT must be called on CPU 0\n");
+	// are we always on bsp?
+	//if (smp_processor_id() != 0)
+	//	panic("Error TXT SEXIT must be called on CPU 0\n");
 
 	/* Disable SMX mode */
-	cr4_set_bits(X86_CR4_SMXE);
+	cr4 = read_cr4();
+	cr4 &= ~X86_CR4_SMXE;
+	write_cr4(cr4);
 
 	/* Do the SEXIT SMX operation */
 	smx_getsec_sexit();
