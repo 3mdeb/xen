@@ -188,7 +188,7 @@ ENTRY(sl_stub_entry)
 
 
 	/* Done, jump to normal 32b pm entry */
-	jmp	startup_32
+	jmp	start
 
 ENTRY(sl_find_mle_base)
 	/* %ecx has PDPT, get first PD */

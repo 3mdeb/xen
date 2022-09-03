@@ -6,9 +6,14 @@
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+#define pr_err(...) printk(XENLOG_ERR __VA_ARGS__)
+#define pr_info(...) printk(XENLOG_INFO __VA_ARGS__)
+#define PFN_PHYS(x)	((uint64_t)(x) << PAGE_SHIFT)
 
 #include <xen/compiler.h>
 #include <xen/init.h>
+#include <asm/cpufeature.h>
+#include <asm/io.h>
 #include <asm/page.h>
 #include <asm/slaunch.h>
 
@@ -88,10 +93,10 @@ static void __init *txt_early_get_heap_table(void *txt, uint32_t type,
 	/* Iterate over heap tables looking for table of "type" */
 	for (i = 0; i < type; i++) {
 		base += offset;
-		heap = early_memremap(base, sizeof(uint64_t));
+		heap = ioremap(base, sizeof(uint64_t));
 		if (!heap)
 			slaunch_txt_reset(txt,
-				"Error early_memremap of heap for heap walk\n",
+				"Error ioremap of heap for heap walk\n",
 				SL_ERROR_HEAP_MAP);
 
 		offset = *((uint64_t *)heap);
@@ -105,15 +110,15 @@ static void __init *txt_early_get_heap_table(void *txt, uint32_t type,
 				"Error invalid 0 offset in heap walk\n",
 				SL_ERROR_HEAP_ZERO_OFFSET);
 
-		early_memunmap(heap, sizeof(uint64_t));
+		iounmap(heap);
 	}
 
 	/* Skip the size field at the head of each table */
 	base += sizeof(uint64_t);
-	heap = early_memremap(base, bytes);
+	heap = ioremap(base, bytes);
 	if (!heap)
 		slaunch_txt_reset(txt,
-				  "Error early_memremap of heap section\n",
+				  "Error ioremap of heap section\n",
 				  SL_ERROR_HEAP_MAP);
 
 	return heap;
@@ -121,7 +126,7 @@ static void __init *txt_early_get_heap_table(void *txt, uint32_t type,
 
 static void __init txt_early_put_heap_table(void *addr, unsigned long size)
 {
-	early_memunmap(addr, size);
+	iounmap(addr);
 }
 
 /*
@@ -201,7 +206,7 @@ static void __init slaunch_txt_reserve_range(uint64_t base, uint64_t size)
 
 	type = e820__get_entry_type(base, base + size - 1);
 	if (type == E820_TYPE_RAM) {
-		pr_info("memblock reserve base: %llx size: %llx\n", base, size);
+		pr_info("memblock reserve base: %lx size: %lx\n", base, size);
 		memblock_reserve(base, size);
 	}
 }
@@ -377,8 +382,9 @@ void __init slaunch_setup_txt(void)
 	uint64_t one = TXT_REGVALUE_ONE, val;
 	void *txt;
 
-	if (!boot_cpu_has(X86_FEATURE_SMX))
-		return;
+	// Let's just ignore this for now
+	//if (!boot_cpu_has(X86_FEATURE_SMX))
+	//	return;
 
 	/*
 	 * If booted through secure launch entry point, the loadflags
@@ -392,13 +398,13 @@ void __init slaunch_setup_txt(void)
 	 * public space. If the public register space cannot be read, TXT may
 	 * be disabled.
 	 */
-	txt = early_ioremap(TXT_PUB_CONFIG_REGS_BASE,
+	txt = ioremap(TXT_PUB_CONFIG_REGS_BASE,
 			    TXT_NR_CONFIG_PAGES * PAGE_SIZE);
 	if (!txt)
 		return;
 
 	memcpy_fromio(&val, txt + TXT_CR_STS, sizeof(val));
-	early_iounmap(txt, TXT_NR_CONFIG_PAGES * PAGE_SIZE);
+	iounmap(txt);
 
 	/* SENTER should have been done */
 	if (!(val & TXT_SENTER_DONE_STS))
@@ -409,7 +415,7 @@ void __init slaunch_setup_txt(void)
 		panic("Error TXT.STS SEXIT_DONE set\n");
 
 	/* Now we want to use the private register space */
-	txt = early_ioremap(TXT_PRIV_CONFIG_REGS_BASE,
+	txt = ioremap(TXT_PRIV_CONFIG_REGS_BASE,
 			    TXT_NR_CONFIG_PAGES * PAGE_SIZE);
 	if (!txt) {
 		/* This is really bad, no where to go from here */
@@ -453,7 +459,7 @@ void __init slaunch_setup_txt(void)
 
 	slaunch_copy_dmar_table(txt);
 
-	early_iounmap(txt, TXT_NR_CONFIG_PAGES * PAGE_SIZE);
+	iounmap(txt);
 
 	pr_info("Intel TXT setup complete\n");
 }
@@ -476,7 +482,7 @@ void slaunch_finalize(int do_sexit)
 	config = ioremap(TXT_PRIV_CONFIG_REGS_BASE, TXT_NR_CONFIG_PAGES *
 			 PAGE_SIZE);
 	if (!config) {
-		pr_emerg("Error SEXIT failed to ioremap TXT private reqs\n");
+		pr_err("Error SEXIT failed to ioremap TXT private reqs\n");
 		return;
 	}
 
@@ -504,13 +510,13 @@ void slaunch_finalize(int do_sexit)
 	config = ioremap(TXT_PUB_CONFIG_REGS_BASE, TXT_NR_CONFIG_PAGES *
 			 PAGE_SIZE);
 	if (!config) {
-		pr_emerg("Error SEXIT failed to ioremap TXT public reqs\n");
+		pr_err("Error SEXIT failed to ioremap TXT public reqs\n");
 		return;
 	}
 
 	memcpy_fromio(&val, config + TXT_CR_E2STS, sizeof(val));
 
-	pr_emerg("TXT clear secrets bit and unlock memory complete.\n");
+	pr_err("TXT clear secrets bit and unlock memory complete.\n");
 
 	if (!do_sexit)
 		return;
