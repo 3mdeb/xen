@@ -393,9 +393,8 @@ void __init slaunch_setup_txt(struct e820map *e820)
 	uint64_t one = TXT_REGVALUE_ONE, val;
 	void *txt;
 
-	// Let's just ignore this for POC
-	//if (!boot_cpu_has(X86_FEATURE_SMX))
-	//	return;
+    if ( !test_bit(X86_FEATURE_SMX, &boot_cpu_data.x86_capability) )
+		return;
 
 	/*
 	 * If booted through secure launch entry point, the loadflags
@@ -511,17 +510,6 @@ void slaunch_finalize(int do_sexit)
 	memcpy_toio(config + TXT_CR_CMD_CLOSE_PRIVATE, &one, sizeof(one));
 	memcpy_fromio(&val, config + TXT_CR_E2STS, sizeof(val));
 
-	/*
-	 * Calls to iounmap are not being done because of the state of the
-	 * system this late in the kexec process. Local IRQs are disabled and
-	 * iounmap causes a TLB flush which in turn causes a warning. Leaving
-	 * thse mappings is not an issue since the next kernel is going to
-	 * completely re-setup memory management.
-	 */
-
-	// TODO: Comment above is probably not correct on Xen <------------------------------------
-	// but we'll only need to call this while rebooting / shutting down, so no kexec, right?
-
 	/* Map public registers and do a final read fence */
 	config = ioremap(TXT_PUB_CONFIG_REGS_BASE, TXT_NR_CONFIG_PAGES *
 			 PAGE_SIZE);
@@ -540,13 +528,6 @@ void slaunch_finalize(int do_sexit)
 	// are we always on bsp? <-----------------------------------------------------------------
 	//if (smp_processor_id() != 0)
 	//	panic("Error TXT SEXIT must be called on CPU 0\n");
-
-	/* Disable SMX mode */
-	// Code from Linux used cr4_set_bits here (which enabled SMX), which seems
-	// like a mistake
-	cr4 = read_cr4();
-	cr4 &= ~X86_CR4_SMXE;
-	write_cr4(cr4);
 
 	/* Do the SEXIT SMX operation */
 	smx_getsec_sexit();

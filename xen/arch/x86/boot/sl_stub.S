@@ -187,6 +187,15 @@ ENTRY(sl_stub_entry)
 .Lcpu_setup_done:
 
 
+	/*
+	 * Prepare for Multiboot2
+	 * %eax still contains the boot params address, which contains the MBI structure
+	 */
+	movl	%esi, %ecx
+
+	/* Multiboot2 magic */
+    movl	$MULTIBOOT2_BOOTLOADER_MAGIC, %eax
+
 	/* Done, jump to normal 32b pm entry */
 	jmp	start
 
@@ -256,15 +265,6 @@ ENTRY(sl_txt_verify_os_mle_struct)
 	/* Check the AP wake block */
 	movl	SL_ap_wake_block(%eax), %ecx
 	movl	SL_ap_wake_block_size(%eax), %edx
-	addl	%ecx, %edx
-	jc	.Loverflow_detected
-	call	sl_check_buffer_mle_overlap
-	cmpl	%esi, %edx
-	ja	.Lbuffer_beyond_pmr
-
-	/* Check the boot params */
-	movl	SL_boot_params_addr(%eax), %ecx
-	movl	$(PAGE_SIZE), %edx
 	addl	%ecx, %edx
 	jc	.Loverflow_detected
 	call	sl_check_buffer_mle_overlap
