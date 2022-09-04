@@ -197,7 +197,7 @@ ENTRY(sl_stub_entry)
     movl	$MULTIBOOT2_BOOTLOADER_MAGIC, %eax
 
 	/* Done, jump to normal 32b pm entry */
-	jmp	start
+	jmp	multiboot2_start
 
 ENTRY(sl_find_mle_base)
 	/* %ecx has PDPT, get first PD */
