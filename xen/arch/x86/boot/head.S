@@ -47,7 +47,6 @@ ENTRY(start)
         jmp     __start
 
         .balign 4
-
 multiboot1_header:             /*** MULTIBOOT1 HEADER ****/
 #define MULTIBOOT_HEADER_FLAGS (MULTIBOOT_HEADER_MODS_ALIGNED | \
                                 MULTIBOOT_HEADER_WANT_MEMORY)
