@@ -420,7 +420,7 @@ int __init tboot_protect_mem_regions(void)
     int rc;
 
     /*
-    if ( !tboot_in_measured_env() )
+    if ( !tboot_in_measured_env() && sl_status == 0 )
         return 1;
     */
 

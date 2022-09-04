@@ -15,7 +15,7 @@ extern uint64_t boot_tsc_stamp;
 
 extern void *stack_start;
 
-extern int sl_status;
+extern uint32_t sl_status;
 
 void early_cpu_init(void);
 void early_time_init(void);

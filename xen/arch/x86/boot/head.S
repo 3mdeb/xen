@@ -135,7 +135,7 @@ mle_header:
 
 .globl sl_status
 sl_status:
-        .int 0
+        .long 0
 
         .section .init.rodata, "a", @progbits
 
@@ -405,7 +405,7 @@ cs32_switch:
 
 sl_stub_entry:
 
-        /* Save information that tboot was used. */
+        /* Save information that TrenchBoot slaunch was used. */
         movl $1, sym_offs(sl_status)
 
         jmp __start
