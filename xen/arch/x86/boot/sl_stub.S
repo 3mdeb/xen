@@ -196,7 +196,7 @@ ENTRY(sl_stub_entry)
 	/* Multiboot2 magic */
     movl	$MULTIBOOT2_BOOTLOADER_MAGIC, %eax
 
-	/* Done, jump to normal 32b pm entry */
+	/* Done, jump to Multiboot2 entry */
 	jmp	multiboot2_start
 
 ENTRY(sl_find_mle_base)
