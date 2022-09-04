@@ -191,7 +191,7 @@ ENTRY(sl_stub_entry)
 	 * Prepare for Multiboot2
 	 * %eax still contains the boot params address, which contains the MBI structure
 	 */
-	movl	%esi, %ecx
+	movl	%esi, %ebx
 
 	/* Multiboot2 magic */
     movl	$MULTIBOOT2_BOOTLOADER_MAGIC, %eax
