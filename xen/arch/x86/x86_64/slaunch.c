@@ -484,6 +484,7 @@ static inline void smx_getsec_sexit(void)
 void slaunch_finalize(int do_sexit)
 {
 	uint64_t one = TXT_REGVALUE_ONE, val;
+	uint32_t cr4;
 	void *config;
 
 	if ((slaunch_get_flags() & (SL_FLAG_ACTIVE|SL_FLAG_ARCH_TXT)) !=
@@ -527,6 +528,11 @@ void slaunch_finalize(int do_sexit)
 	// are we always on bsp? <-----------------------------------------------------------------
 	//if (smp_processor_id() != 0)
 	//	panic("Error TXT SEXIT must be called on CPU 0\n");
+
+	/* Enable SMX mode */
+	cr4 = read_cr4();
+	cr4 &= X86_CR4_SMXE;
+	write_cr4(cr4);
 
 	/* Do the SEXIT SMX operation */
 	smx_getsec_sexit();
