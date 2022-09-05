@@ -870,25 +870,6 @@ static struct domain *__init create_dom0(const module_t *image,
 #define TXTCR_HEAP_BASE             0x0300
 #define TXTCR_HEAP_SIZE             0x0308
 
-void __init txt_copy_memory(unsigned char *va, uint32_t size,
-                                     unsigned long pa)
-{
-    unsigned long map_base = 0;
-    unsigned char *map_addr = NULL;
-    unsigned int i;
-
-    for ( i = 0; i < size; i++ )
-    {
-        if ( map_base != PFN_DOWN(pa + i) )
-        {
-            map_base = PFN_DOWN(pa + i);
-            set_fixmap(FIX_TBOOT_MAP_ADDRESS, map_base << PAGE_SHIFT);
-            map_addr = fix_to_virt(FIX_TBOOT_MAP_ADDRESS);
-        }
-        va[i] = map_addr[pa + i - (map_base << PAGE_SHIFT)];
-    }
-}
-
 int protect_txt_mem_regions(void)
 {
     uint64_t txt_heap_base, txt_heap_size;
@@ -897,16 +878,15 @@ int protect_txt_mem_regions(void)
 
     txt_heap_base = txt_heap_size = sinit_base = sinit_size = 0;
     /* TXT Heap */
-    txt_copy_memory((unsigned char *)&txt_heap_base, sizeof(txt_heap_base),
-                      TXT_PUB_CONFIG_REGS_BASE + TXTCR_HEAP_BASE);
-    txt_copy_memory((unsigned char *)&txt_heap_size, sizeof(txt_heap_size),
-                      TXT_PUB_CONFIG_REGS_BASE + TXTCR_HEAP_SIZE);
+    memcpy(maddr_to_virt(TXT_PUB_CONFIG_REGS_BASE + TXTCR_HEAP_BASE),
+           &txt_heap_base , sizeof(txt_heap_base));
+    memcpy(maddr_to_virt(TXT_PUB_CONFIG_REGS_BASE + TXTCR_HEAP_SIZE),
+           &txt_heap_size , sizeof(txt_heap_size));
     /* SINIT */
-    txt_copy_memory((unsigned char *)&sinit_base, sizeof(sinit_base),
-                      TXT_PUB_CONFIG_REGS_BASE + TXTCR_SINIT_BASE);
-    txt_copy_memory((unsigned char *)&sinit_size, sizeof(sinit_size),
-                      TXT_PUB_CONFIG_REGS_BASE + TXTCR_SINIT_SIZE);
-    clear_fixmap(FIX_TBOOT_MAP_ADDRESS);
+    memcpy(maddr_to_virt(TXT_PUB_CONFIG_REGS_BASE + TXTCR_SINIT_BASE),
+           &sinit_base , sizeof(sinit_base));
+    memcpy(maddr_to_virt(TXT_PUB_CONFIG_REGS_BASE + TXTCR_SINIT_SIZE),
+           &sinit_size , sizeof(sinit_size));
 
     /* TXT Heap */
     if ( txt_heap_base == 0 )
