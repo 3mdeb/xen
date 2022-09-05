@@ -853,6 +853,90 @@ static struct domain *__init create_dom0(const module_t *image,
     return d;
 }
 
+/*
+ * TXT configuration registers (offsets from TXT_{PUB, PRIV}_CONFIG_REGS_BASE)
+ */
+
+#define TXT_PUB_CONFIG_REGS_BASE       0xfed30000
+#define TXT_PRIV_CONFIG_REGS_BASE      0xfed20000
+
+/* # pages for each config regs space - used by fixmap */
+#define NR_TXT_CONFIG_PAGES     ((TXT_PUB_CONFIG_REGS_BASE -                \
+                                  TXT_PRIV_CONFIG_REGS_BASE) >> PAGE_SHIFT)
+
+/* offsets from pub/priv config space */
+#define TXTCR_SINIT_BASE            0x0270
+#define TXTCR_SINIT_SIZE            0x0278
+#define TXTCR_HEAP_BASE             0x0300
+#define TXTCR_HEAP_SIZE             0x0308
+
+void __init txt_copy_memory(unsigned char *va, uint32_t size,
+                                     unsigned long pa)
+{
+    unsigned long map_base = 0;
+    unsigned char *map_addr = NULL;
+    unsigned int i;
+
+    for ( i = 0; i < size; i++ )
+    {
+        if ( map_base != PFN_DOWN(pa + i) )
+        {
+            map_base = PFN_DOWN(pa + i);
+            set_fixmap(FIX_TBOOT_MAP_ADDRESS, map_base << PAGE_SHIFT);
+            map_addr = fix_to_virt(FIX_TBOOT_MAP_ADDRESS);
+        }
+        va[i] = map_addr[pa + i - (map_base << PAGE_SHIFT)];
+    }
+}
+
+int protect_txt_mem_regions(void)
+{
+    uint64_t txt_heap_base, txt_heap_size;
+    uint64_t sinit_base, sinit_size;
+    int rc;
+
+    txt_heap_base = txt_heap_size = sinit_base = sinit_size = 0;
+    /* TXT Heap */
+    txt_copy_memory((unsigned char *)&txt_heap_base, sizeof(txt_heap_base),
+                      TXT_PUB_CONFIG_REGS_BASE + TXTCR_HEAP_BASE);
+    txt_copy_memory((unsigned char *)&txt_heap_size, sizeof(txt_heap_size),
+                      TXT_PUB_CONFIG_REGS_BASE + TXTCR_HEAP_SIZE);
+    /* SINIT */
+    txt_copy_memory((unsigned char *)&sinit_base, sizeof(sinit_base),
+                      TXT_PUB_CONFIG_REGS_BASE + TXTCR_SINIT_BASE);
+    txt_copy_memory((unsigned char *)&sinit_size, sizeof(sinit_size),
+                      TXT_PUB_CONFIG_REGS_BASE + TXTCR_SINIT_SIZE);
+    clear_fixmap(FIX_TBOOT_MAP_ADDRESS);
+
+    /* TXT Heap */
+    if ( txt_heap_base == 0 )
+        return 0;
+
+    rc = e820_change_range_type(&e820, txt_heap_base,
+                                txt_heap_base + txt_heap_size,
+                                E820_RESERVED, E820_UNUSABLE);
+    if ( !rc )
+        return 0;
+
+    /* SINIT */
+    if ( sinit_base == 0 )
+        return 0;
+    rc = e820_change_range_type(&e820, sinit_base,
+                                sinit_base + sinit_size,
+                                E820_RESERVED, E820_UNUSABLE);
+    if ( !rc )
+        return 0;
+
+    /* TXT Private Space */
+    rc = e820_change_range_type(&e820, TXT_PRIV_CONFIG_REGS_BASE,
+                 TXT_PRIV_CONFIG_REGS_BASE + NR_TXT_CONFIG_PAGES * PAGE_SIZE,
+                 E820_RESERVED, E820_UNUSABLE);
+    if ( !rc )
+        return 0;
+
+    return 1;
+}
+
 /* How much of the directmap is prebuilt at compile time. */
 #define PREBUILT_MAP_LIMIT (1 << L2_PAGETABLE_SHIFT)
 
@@ -894,7 +978,7 @@ void __init noreturn __start_xen(unsigned long mbi_p)
     /* Full exception support from here on in. */
 
     if(sl_status)
-        tboot_protect_mem_regions();
+        protect_txt_mem_regions();
 
     rdmsrl(MSR_EFER, this_cpu(efer));
     asm volatile ( "mov %%cr4,%0" : "=r" (info->cr4) );
