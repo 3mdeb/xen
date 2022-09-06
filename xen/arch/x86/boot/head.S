@@ -47,7 +47,6 @@ ENTRY(start)
         jmp     __start
 
         .balign 4
-
 multiboot1_header:             /*** MULTIBOOT1 HEADER ****/
 #define MULTIBOOT_HEADER_FLAGS (MULTIBOOT_HEADER_MODS_ALIGNED | \
                                 MULTIBOOT_HEADER_WANT_MEMORY)
@@ -405,8 +404,11 @@ cs32_switch:
 
 sl_stub_entry:
 
+        /* Calculate the load base address. */
+        call    1f
+1:      pop     %esi
         /* Save information that TrenchBoot slaunch was used. */
-        movl $1, sym_offs(sl_status)
+        movl $1, sym_esi(sl_status)
 
         jmp __start
 

@@ -870,7 +870,7 @@ static struct domain *__init create_dom0(const module_t *image,
 #define TXTCR_HEAP_BASE             0x0300
 #define TXTCR_HEAP_SIZE             0x0308
 
-int protect_txt_mem_regions(void)
+static void protect_txt_mem_regions(void)
 {
     uint64_t txt_heap_base, txt_heap_size;
     uint64_t sinit_base, sinit_size;
