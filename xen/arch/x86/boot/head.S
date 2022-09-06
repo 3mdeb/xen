@@ -407,6 +407,8 @@ sl_stub_entry:
         /* Calculate the load base address. */
         call    1f
 1:      pop     %esi
+        sub     $sym_offs(1b), %esi
+
         /* Save information that TrenchBoot slaunch was used. */
         movl $1, sym_esi(sl_status)
 
