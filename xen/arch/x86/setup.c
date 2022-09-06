@@ -956,10 +956,6 @@ void __init noreturn __start_xen(unsigned long mbi_p)
     setup_virtual_regions(__start___ex_table, __stop___ex_table);
 
     /* Full exception support from here on in. */
-
-    if(sl_status)
-        protect_txt_mem_regions();
-
     rdmsrl(MSR_EFER, this_cpu(efer));
     asm volatile ( "mov %%cr4,%0" : "=r" (info->cr4) );
 
@@ -1209,6 +1205,9 @@ void __init noreturn __start_xen(unsigned long mbi_p)
 
     /* Sanitise the raw E820 map to produce a final clean version. */
     max_page = raw_max_page = init_e820(memmap_type, &e820_raw);
+
+    if( sl_status )
+        protect_txt_mem_regions();
 
     if ( !efi_enabled(EFI_BOOT) && e820_raw.nr_map >= 1 )
     {
