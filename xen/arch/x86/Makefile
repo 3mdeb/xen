@@ -72,6 +72,15 @@ obj-$(CONFIG_TBOOT) += tboot.o
 obj-y += hpet.o
 obj-y += vm_event.o
 obj-y += xstate.o
+obj-y += smodule.o
+obj-y += tis.o
+obj-y += tpm_buff.o
+obj-y += tpm.o
+obj-y += tpm1_cmds.o
+obj-y += tpm2_cmds.o
+obj-y += tpm2_auth.o
+obj-y += tpmio.o
+obj-y += crb.o
 
 ifneq ($(CONFIG_PV_SHIM_EXCLUSIVE),y)
 obj-y += domctl.o
