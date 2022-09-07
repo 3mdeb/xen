@@ -55,6 +55,7 @@
 #include <asm/guest.h>
 #include <asm/microcode.h>
 #include <asm/pv/domain.h>
+#include <asm/intel_txt.h>
 
 /* opt_nosmp: If true, secondary processors are ignored. */
 static bool __initdata opt_nosmp;
@@ -851,70 +852,6 @@ static struct domain *__init create_dom0(const module_t *image,
     }
 
     return d;
-}
-
-/*
- * TXT configuration registers (offsets from TXT_{PUB, PRIV}_CONFIG_REGS_BASE)
- */
-
-#define TXT_PUB_CONFIG_REGS_BASE       0xfed30000
-#define TXT_PRIV_CONFIG_REGS_BASE      0xfed20000
-
-/* # pages for each config regs space - used by fixmap */
-#define NR_TXT_CONFIG_PAGES     ((TXT_PUB_CONFIG_REGS_BASE -                \
-                                  TXT_PRIV_CONFIG_REGS_BASE) >> PAGE_SHIFT)
-
-/* offsets from pub/priv config space */
-#define TXTCR_SINIT_BASE            0x0270
-#define TXTCR_SINIT_SIZE            0x0278
-#define TXTCR_HEAP_BASE             0x0300
-#define TXTCR_HEAP_SIZE             0x0308
-
-static void protect_txt_mem_regions(void)
-{
-    uint64_t txt_heap_base, txt_heap_size;
-    uint64_t sinit_base, sinit_size;
-    int rc;
-
-    txt_heap_base = txt_heap_size = sinit_base = sinit_size = 0;
-    /* TXT Heap */
-    memcpy(maddr_to_virt(TXT_PUB_CONFIG_REGS_BASE + TXTCR_HEAP_BASE),
-           &txt_heap_base , sizeof(txt_heap_base));
-    memcpy(maddr_to_virt(TXT_PUB_CONFIG_REGS_BASE + TXTCR_HEAP_SIZE),
-           &txt_heap_size , sizeof(txt_heap_size));
-    /* SINIT */
-    memcpy(maddr_to_virt(TXT_PUB_CONFIG_REGS_BASE + TXTCR_SINIT_BASE),
-           &sinit_base , sizeof(sinit_base));
-    memcpy(maddr_to_virt(TXT_PUB_CONFIG_REGS_BASE + TXTCR_SINIT_SIZE),
-           &sinit_size , sizeof(sinit_size));
-
-    /* TXT Heap */
-    if ( txt_heap_base == 0 )
-        return 0;
-
-    rc = e820_change_range_type(&e820, txt_heap_base,
-                                txt_heap_base + txt_heap_size,
-                                E820_RESERVED, E820_UNUSABLE);
-    if ( !rc )
-        return 0;
-
-    /* SINIT */
-    if ( sinit_base == 0 )
-        return 0;
-    rc = e820_change_range_type(&e820, sinit_base,
-                                sinit_base + sinit_size,
-                                E820_RESERVED, E820_UNUSABLE);
-    if ( !rc )
-        return 0;
-
-    /* TXT Private Space */
-    rc = e820_change_range_type(&e820, TXT_PRIV_CONFIG_REGS_BASE,
-                 TXT_PRIV_CONFIG_REGS_BASE + NR_TXT_CONFIG_PAGES * PAGE_SIZE,
-                 E820_RESERVED, E820_UNUSABLE);
-    if ( !rc )
-        return 0;
-
-    return 1;
 }
 
 /* How much of the directmap is prebuilt at compile time. */
