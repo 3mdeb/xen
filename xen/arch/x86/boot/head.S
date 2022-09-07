@@ -402,22 +402,6 @@ cs32_switch:
         /* Jump to earlier loaded address. */
         jmp     *%edi
 
-<<<<<<< HEAD
-
-sl_stub_entry:
-
-        /* Calculate the load base address. */
-        call    1f
-1:      pop     %esi
-        sub     $sym_offs(1b), %esi
-
-        /* Save information that TrenchBoot slaunch was used. */
-        movl $1, sym_esi(sl_status)
-
-        jmp __start
-
-=======
->>>>>>> 0b28128348 ([WIP] Import slaunch.c, slaunch.h, sl_stub.S from linux)
 #ifdef CONFIG_PVH_GUEST
 ELFNOTE(Xen, XEN_ELFNOTE_PHYS32_ENTRY, .long sym_offs(__pvh_start))
 

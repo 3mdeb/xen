@@ -185,16 +185,14 @@ ENTRY(sl_stub_entry)
 	ud2
 
 .Lcpu_setup_done:
-
-
 	/*
 	 * Prepare for Multiboot2
-	 * %eax still contains the boot params address, which contains the MBI structure
+	 * %esi still contains the boot params address, which contains the MBI structure
 	 */
 	movl	%esi, %ebx
 
-	/* Multiboot2 magic */
-    movl	$MULTIBOOT2_BOOTLOADER_MAGIC, %eax
+	/* Multiboot2 magic, we do not support multiboot1 yet */
+	movl	$MULTIBOOT2_BOOTLOADER_MAGIC, %eax
 
 	/* Done, jump to Multiboot2 entry */
 	jmp	multiboot2_start
