@@ -132,6 +132,10 @@ mle_header:
         .size mle_header, .-mle_header
         .type mle_header, @object
 
+.globl sl_status
+sl_status:
+        .long 0
+
         .section .init.rodata, "a", @progbits
 
 .Lbad_cpu_msg: .asciz "ERR: Not a 64-bit CPU!"
@@ -399,6 +403,14 @@ cs32_switch:
 
 
 sl_stub_entry:
+
+        /* Calculate the load base address. */
+        call    1f
+1:      pop     %esi
+        sub     $sym_offs(1b), %esi
+
+        /* Save information that TrenchBoot slaunch was used. */
+        movl $1, sym_esi(sl_status)
 
         jmp __start
 
