@@ -24,6 +24,7 @@
 #include <asm/processor.h>
 #include <asm/io.h>
 #include <asm/page.h>
+#include <asm/setup.h>
 #include <asm/slaunch.h>
 
 static uint32_t sl_flags;
@@ -393,16 +394,15 @@ void __init slaunch_setup_txt(struct e820map *e820)
 	uint64_t one = TXT_REGVALUE_ONE, val;
 	void *txt;
 
-    if ( !test_bit(X86_FEATURE_SMX, &boot_cpu_data.x86_capability) )
+	if ( !test_bit(X86_FEATURE_SMX, &boot_cpu_data.x86_capability) )
 		return;
 
 	/*
-	 * If booted through secure launch entry point, the loadflags
-	 * option will be set.
+	 * If booted through secure launch entry point, the status variable
+	 * will be set.
 	 */
-	// Don't bother checking this for POC
-	//if (!(boot_params.hdr.loadflags & SLAUNCH_FLAG))
-	//	return;
+	if ( sl_status == 0 )
+		return;
 
 	/*
 	 * See if SENTER was done by reading the status register in the
@@ -410,7 +410,7 @@ void __init slaunch_setup_txt(struct e820map *e820)
 	 * be disabled.
 	 */
 	txt = ioremap(TXT_PUB_CONFIG_REGS_BASE,
-			    TXT_NR_CONFIG_PAGES * PAGE_SIZE);
+		      TXT_NR_CONFIG_PAGES * PAGE_SIZE);
 	if (!txt)
 		return;
 
@@ -525,13 +525,12 @@ void slaunch_finalize(int do_sexit)
 	if (!do_sexit)
 		return;
 
-	// are we always on bsp? <-----------------------------------------------------------------
-	//if (smp_processor_id() != 0)
-	//	panic("Error TXT SEXIT must be called on CPU 0\n");
+	if (smp_processor_id() != 0)
+		panic("Error TXT SEXIT must be called on CPU 0\n");
 
 	/* Enable SMX mode */
 	cr4 = read_cr4();
-	cr4 &= X86_CR4_SMXE;
+	cr4 |= X86_CR4_SMXE;
 	write_cr4(cr4);
 
 	/* Do the SEXIT SMX operation */
