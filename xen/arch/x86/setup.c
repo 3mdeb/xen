@@ -1970,11 +1970,11 @@ void __init noreturn __start_xen(unsigned long mbi_p)
                initrdidx);
 
     sl_tpm = enable_tpm();
-    extend_pcr(sl_tpm, mod->mod_start,
+    extend_pcr(sl_tpm, (void*)(long)mod->mod_start,
                mod->mod_end - mod->mod_start, 0, 0);
 
-    intrid = initrdidx < mbi->mods_count ? mod + initrdidx : NULL;
-    extend_pcr(sl_tpm, intrid->mod_start,
+    intrid = (module_t*)(initrdidx < mbi->mods_count ? mod + initrdidx : NULL);
+    extend_pcr(sl_tpm, (void*)(long)intrid->mod_start,
                intrid->mod_end - intrid->mod_start, 0, 0);
 
     /*
