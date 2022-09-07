@@ -1969,13 +1969,16 @@ void __init noreturn __start_xen(unsigned long mbi_p)
                "Multiple initrd candidates, picking module #%u\n",
                initrdidx);
 
-    sl_tpm = enable_tpm();
+    if ( sl_status != 0 )
+    {
+            sl_tpm = enable_tpm();
     extend_pcr(sl_tpm, (void*)(long)mod->mod_start,
                mod->mod_end - mod->mod_start, 18, NULL);
 
     initrd = (module_t*)(initrdidx < mbi->mods_count ? mod + initrdidx : NULL);
     extend_pcr(sl_tpm, (void*)(long)initrd->mod_start,
                initrd->mod_end - initrd->mod_start, 18, NULL);
+    }
 
     /*
      * We're going to setup domain0 using the module(s) that we stashed safely
