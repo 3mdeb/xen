@@ -27,6 +27,7 @@
 #include <asm/tboot.h>
 #include <asm/apic.h>
 #include <asm/guest.h>
+#include <asm/slaunch.h>
 
 enum reboot_type {
         BOOT_INVALID,
@@ -133,6 +134,8 @@ void machine_halt(void)
 {
     watchdog_disable();
     console_start_sync();
+
+    slaunch_finalize(0);
 
     if ( system_state >= SYS_STATE_smp_boot )
     {
@@ -594,6 +597,8 @@ void machine_restart(unsigned int delay_millisecs)
         acpi_dmar_reinstate();
         tboot_shutdown(TB_SHUTDOWN_REBOOT);
     }
+
+    slaunch_finalize(0);
 
     /* Just in case reboot_init() didn't run yet. */
     default_reboot_type();

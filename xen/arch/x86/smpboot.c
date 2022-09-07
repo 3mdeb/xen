@@ -432,12 +432,14 @@ static int wakeup_secondary_cpu(int phys_apicid, unsigned long start_eip)
     /*
      * Normal AP startup uses an INIT-SIPI-SIPI sequence.
      *
-     * When using SKINIT for Secure Startup, the INIT IPI must be skipped, so
-     * that SIPI is the first interrupt the AP sees.
+     * When using SKINIT or GETSEC[SENTER] for Secure Startup, the INIT IPI
+     * must be skipped, so that SIPI is the first interrupt the AP sees.
      *
-     * Refer to AMD APM Vol2 15.27 "Secure Startup with SKINIT".
+     * Refer to AMD APM Vol2 15.27 "Secure Startup with SKINIT"
+     * and Intel TXT Software Development Guide.
      */
-    bool send_INIT = ap_boot_method != AP_BOOT_SKINIT;
+    bool send_INIT = ap_boot_method != AP_BOOT_SKINIT
+                  && ap_boot_method != AP_BOOT_GETSEC_WAKEUP;
 
     /*
      * Some versions of tboot might be able to handle the entire wake sequence

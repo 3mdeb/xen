@@ -123,7 +123,7 @@ void __init print_e820_memory_map(const struct e820entry *map,
 /*
  * Sanitize the BIOS e820 map.
  *
- * Some e820 responses include overlapping entries.  The following 
+ * Some e820 responses include overlapping entries.  The following
  * replaces the original e820 map with a new one, removing overlaps.
  *
  */
@@ -342,7 +342,7 @@ static int __init copy_e820_map(struct e820entry * biosmap, unsigned int nr_map)
 /*
  * Find the highest page frame number we have available
  */
-static unsigned long __init find_max_pfn(void)
+unsigned long __init e820_find_max_pfn(void)
 {
     unsigned int i;
     unsigned long max_pfn = 0;
@@ -379,7 +379,7 @@ static void __init clip_to_limit(uint64_t limit, char *warnmsg)
 
         /* If none found, we are done. */
         if ( i == e820.nr_map )
-            break;        
+            break;
 
         old_limit = max_t(
             uint64_t, old_limit, e820.map[i].addr + e820.map[i].size);
@@ -391,7 +391,7 @@ static void __init clip_to_limit(uint64_t limit, char *warnmsg)
             continue;
 
         /*
-         * If the type change fails (e.g., not space in table) then we clip or 
+         * If the type change fails (e.g., not space in table) then we clip or
          * delete the region as appropriate.
          */
         if ( e820.map[i].addr < limit )
@@ -699,5 +699,5 @@ unsigned long __init init_e820(const char *str, struct e820map *raw)
     printk("%s RAM map:\n", str);
     print_e820_memory_map(e820.map, e820.nr_map);
 
-    return find_max_pfn();
+    return e820_find_max_pfn();
 }

@@ -29,6 +29,7 @@ extern int reserve_e820_ram(struct e820map *e820, uint64_t s, uint64_t e);
 extern int e820_change_range_type(
     struct e820map *e820, uint64_t s, uint64_t e,
     uint32_t orig_type, uint32_t new_type);
+extern unsigned long e820_find_max_pfn(void);
 extern int e820_add_range(
     struct e820map *, uint64_t s, uint64_t e, uint32_t type);
 extern unsigned long init_e820(const char *, struct e820map *);

@@ -56,6 +56,7 @@
 #include <asm/microcode.h>
 #include <asm/pv/domain.h>
 #include <asm/intel_txt.h>
+#include <asm/slaunch.h>
 
 /* opt_nosmp: If true, secondary processors are ignored. */
 static bool __initdata opt_nosmp;
@@ -1054,7 +1055,7 @@ void __init noreturn __start_xen(unsigned long mbi_p)
     }
     else if ( efi_enabled(EFI_BOOT) )
         memmap_type = "EFI";
-    else if ( (e820_raw.nr_map = 
+    else if ( (e820_raw.nr_map =
                    copy_bios_e820(e820_raw.map,
                                   ARRAY_SIZE(e820_raw.map))) != 0 )
     {
@@ -1569,7 +1570,7 @@ void __init noreturn __start_xen(unsigned long mbi_p)
         unsigned long e = min(s + PFN_UP(kexec_crash_area.size),
                               PFN_UP(__pa(HYPERVISOR_VIRT_END - 1)));
 
-        if ( e > s ) 
+        if ( e > s )
             map_pages_to_xen((unsigned long)__va(kexec_crash_area.start),
                              _mfn(s), e - s, PAGE_HYPERVISOR);
     }
@@ -1699,7 +1700,7 @@ void __init noreturn __start_xen(unsigned long mbi_p)
 
     open_softirq(NEW_TLBFLUSH_CLOCK_PERIOD_SOFTIRQ, new_tlbflush_clock_period);
 
-    if ( opt_watchdog ) 
+    if ( opt_watchdog )
         nmi_watchdog = NMI_LOCAL_APIC;
 
     find_smp_config();
@@ -1847,6 +1848,8 @@ void __init noreturn __start_xen(unsigned long mbi_p)
 
     iommu_setup();    /* setup iommu if available */
 
+    slaunch_setup_txt(&boot_e820);
+
     smp_prepare_cpus();
 
     spin_debug_enable();
@@ -1910,7 +1913,7 @@ void __init noreturn __start_xen(unsigned long mbi_p)
 
     do_initcalls();
 
-    if ( opt_watchdog ) 
+    if ( opt_watchdog )
         watchdog_setup();
 
     if ( !tboot_protect_mem_regions() )

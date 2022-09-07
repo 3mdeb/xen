@@ -72,5 +72,5 @@ void hwdom_shutdown(u8 reason)
         maybe_reboot();
         break; /* not reached */
     }
-}  
+}
 
