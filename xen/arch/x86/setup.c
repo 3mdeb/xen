@@ -57,6 +57,11 @@
 #include <asm/pv/domain.h>
 #include <asm/intel_txt.h>
 #include <asm/slaunch.h>
+#include <tpm/tpm.h>
+#include <sha/sha256.h>
+#include <sha/sha1sum.h>
+#include <sha/event_log.h>
+#include <tpm/tpm2_constants.h>
 
 /* opt_nosmp: If true, secondary processors are ignored. */
 static bool __initdata opt_nosmp;
@@ -855,6 +860,33 @@ static struct domain *__init create_dom0(const module_t *image,
     return d;
 }
 
+static void extend_pcr(struct tpm *tpm, void *data, u32 size, u32 pcr, char *ev)
+{
+    u8 hash[SHA1_DIGEST_SIZE];
+    sha1sum(hash, data, size);
+    printk("shasum calculated:\n");
+//  hexdump(hash, SHA1_DIGEST_SIZE);
+    tpm_extend_pcr(tpm, pcr, TPM_ALG_SHA1, hash);
+
+    if ( tpm->family == TPM12 )
+    {
+//      log_event_tpm12(pcr, hash, ev);
+    }
+    else if ( tpm->family == TPM20 )
+    {
+        u8 sha256_hash[SHA256_DIGEST_SIZE];
+
+        sha256sum(sha256_hash, data, size);
+        printk("shasum calculated:\n");
+//      hexdump(sha256_hash, SHA256_DIGEST_SIZE);
+        tpm_extend_pcr(tpm, pcr, TPM_ALG_SHA256, &sha256_hash[0]);
+
+//      log_event_tpm20(pcr, hash, sha256_hash, ev);
+    }
+
+    printk("PCR extended\n");
+}
+
 /* How much of the directmap is prebuilt at compile time. */
 #define PREBUILT_MAP_LIMIT (1 << L2_PAGETABLE_SHIFT)
 
@@ -878,6 +910,8 @@ void __init noreturn __start_xen(unsigned long mbi_p)
         .stop_bits = 1
     };
     const char *hypervisor_name;
+    struct tpm* sl_tpm;
+    module_t *intrid;
 
     /* Critical region without IDT or TSS.  Any fault is deadly! */
 
@@ -1934,6 +1968,14 @@ void __init noreturn __start_xen(unsigned long mbi_p)
         printk(XENLOG_WARNING
                "Multiple initrd candidates, picking module #%u\n",
                initrdidx);
+
+    sl_tpm = enable_tpm();
+    extend_pcr(sl_tpm, mod->mod_start,
+               mod->mod_end - mod->mod_start, 0, 0);
+
+    intrid = initrdidx < mbi->mods_count ? mod + initrdidx : NULL;
+    extend_pcr(sl_tpm, intrid->mod_start,
+               intrid->mod_end - intrid->mod_start, 0, 0);
 
     /*
      * We're going to setup domain0 using the module(s) that we stashed safely

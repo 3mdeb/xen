@@ -81,6 +81,9 @@ obj-y += tpm2_cmds.o
 obj-y += tpm2_auth.o
 obj-y += tpmio.o
 obj-y += crb.o
+obj-y += sha256.o
+obj-y += sha1sum.o
+#obj-y += event_log.o
 
 ifneq ($(CONFIG_PV_SHIM_EXCLUSIVE),y)
 obj-y += domctl.o
