@@ -8,16 +8,6 @@
  * published on http://ptgmedia.pearsoncmg.com.
  *
  */
-/*
-#ifdef LINUX_KERNEL
-
-#include <linux/types.h>
-#include <asm/byteorder.h>
-
-#elif defined LINUX_USERSPACE
-*/
-
-//#endif
 
 #include <xen/types.h>
 #include <tpm/tpm.h>

@@ -6,21 +6,7 @@
  *
  */
 
-#ifdef LINUX_KERNEL
-
-#include <linux/types.h>
-#include <linux/string.h>
-
-#elif defined LINUX_USERSPACE
-
-#include <stdint.h>
-#include <string.h>
-#include <sys/types.h>
-
-#endif
-
 #include <xen/string.h>
-
 #include <tpm/tpm.h>
 #include <tpm/tpmbuff.h>
 #include <tpm/tpm_common.h>
