@@ -864,7 +864,7 @@ static void extend_pcr(struct tpm *tpm, void *data, u32 size, u32 pcr, char *ev)
 {
     u8 hash[SHA1_DIGEST_SIZE];
     sha1sum(hash, data, size);
-    printk("shasum calculated:\n");
+//    printk("shasum calculated:\n");
 //  hexdump(hash, SHA1_DIGEST_SIZE);
     tpm_extend_pcr(tpm, pcr, TPM_ALG_SHA1, hash);
 
@@ -877,7 +877,7 @@ static void extend_pcr(struct tpm *tpm, void *data, u32 size, u32 pcr, char *ev)
         u8 sha256_hash[SHA256_DIGEST_SIZE];
 
         sha256sum(sha256_hash, data, size);
-        printk("shasum calculated:\n");
+//        printk("shasum calculated:\n");
 //      hexdump(sha256_hash, SHA256_DIGEST_SIZE);
         tpm_extend_pcr(tpm, pcr, TPM_ALG_SHA256, &sha256_hash[0]);
 
@@ -1969,15 +1969,16 @@ void __init noreturn __start_xen(unsigned long mbi_p)
                "Multiple initrd candidates, picking module #%u\n",
                initrdidx);
 
-    if ( sl_status != 0 )
+    if ( sl_status )
     {
-            sl_tpm = enable_tpm();
-    extend_pcr(sl_tpm, (void*)(long)mod->mod_start,
-               mod->mod_end - mod->mod_start, 18, NULL);
+        sl_tpm = enable_tpm();
+        extend_pcr(sl_tpm, (void*)(long)mod->mod_start,
+                   mod->mod_end - mod->mod_start, 18, NULL);
 
-    initrd = (module_t*)(initrdidx < mbi->mods_count ? mod + initrdidx : NULL);
-    extend_pcr(sl_tpm, (void*)(long)initrd->mod_start,
-               initrd->mod_end - initrd->mod_start, 18, NULL);
+        initrd = (module_t*)(initrdidx < mbi->mods_count ? mod + initrdidx
+                                                         : NULL);
+        extend_pcr(sl_tpm, (void*)(long)initrd->mod_start,
+                   initrd->mod_end - initrd->mod_start, 18, NULL);
     }
 
     /*
