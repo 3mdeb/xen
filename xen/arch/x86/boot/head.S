@@ -3,6 +3,7 @@
 #include <public/xen.h>
 #include <asm/asm_defns.h>
 #include <asm/fixmap.h>
+#include <asm/intel_txt.h>
 #include <asm/page.h>
 #include <asm/processor.h>
 #include <asm/msr-index.h>
@@ -397,19 +398,6 @@ cs32_switch:
         /* Jump to earlier loaded address. */
         jmp     *%edi
 
-
-sl_stub_entry:
-
-        /* Calculate the load base address. */
-        call    1f
-1:      pop     %esi
-        sub     $sym_offs(1b), %esi
-
-        /* Save information that TrenchBoot slaunch was used. */
-        movl $1, sym_esi(sl_status)
-
-        jmp __start
-
 #ifdef CONFIG_PVH_GUEST
 ELFNOTE(Xen, XEN_ELFNOTE_PHYS32_ENTRY, .long sym_offs(__pvh_start))
 
@@ -457,6 +445,11 @@ __pvh_start:
 
 #endif /* CONFIG_PVH_GUEST */
 
+sl_stub_entry:
+        movl    $SLAUNCH_BOOTLOADER_MAGIC,%eax
+
+        /* Fall through to Multiboot entry point. */
+
 __start:
         cld
         cli
@@ -485,6 +478,10 @@ __start:
         /* Bootloaders may set multiboot{1,2}.mem_lower to a nonzero value. */
         xor     %edx,%edx
 
+        /* Check for TrenchBoot slaunch bootloader. */
+        cmp     $SLAUNCH_BOOTLOADER_MAGIC,%eax
+        je      .Lslaunch_proto
+
         /* Check for Multiboot2 bootloader. */
         cmp     $MULTIBOOT2_BOOTLOADER_MAGIC,%eax
         je      .Lmultiboot2_proto
@@ -499,6 +496,21 @@ __start:
         /* Not available? BDA value will be fine. */
         cmovnz  MB_mem_lower(%ebx),%edx
         jmp     trampoline_bios_setup
+
+.Lslaunch_proto:
+        /* Save information that TrenchBoot slaunch was used. */
+        movl $1, sym_esi(sl_status)
+
+        /* Pass load base address to txt_early_tests(). */
+        push    %esi
+        call    txt_early_tests
+
+        /*
+         * txt_early_tests() returns MBI address, move it to EBX, move magic
+         * number expected by Multiboot 2 to EAX and fall through.
+         */
+        movl    %eax,%ebx
+        movl    $MULTIBOOT2_BOOTLOADER_MAGIC,%eax
 
 .Lmultiboot2_proto:
         /* Skip Multiboot2 information fixed part. */
@@ -820,6 +832,10 @@ cmdline_parse_early:
         ALIGN
 reloc:
         .incbin "reloc.bin"
+
+        ALIGN
+txt_early_tests:
+        .incbin "txt_early.bin"
 
 ENTRY(trampoline_start)
 #include "trampoline.S"
