@@ -122,7 +122,7 @@ mle_header:
         .long	0x42b651cb  /* UUID3 */
         .long   0x00000034  /* MLE header size */
         .long	0x00020002  /* MLE version 2.2 */
-        .long   sym_offs(sl_stub_entry)  /* Linear entry point of MLE (virt. address) */
+        .long   (sl_stub_entry - start)  /* Linear entry point of MLE (SINIT virt. address) */
         .long   0x00000000  /* First valid page of MLE */
         .long   0x00000000  /* Offset within binary of first byte of MLE */
         .long   0x00000000  /* Offset within binary of last byte + 1 of MLE */
