@@ -270,5 +270,6 @@ static inline void *txt_sinit_mle_data_start(void *heap)
 }
 
 extern void protect_txt_mem_regions(void);
+extern void txt_restore_mtrrs(bool e820_verbose);
 
 #endif /* __ASSEMBLY__ */
