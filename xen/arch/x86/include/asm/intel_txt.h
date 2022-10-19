@@ -76,6 +76,8 @@
 
 #ifndef __ASSEMBLY__
 
+extern unsigned long sl_status;
+
 /*
  * Always use private space as some of registers are either read-only or not
  * present in public space.
