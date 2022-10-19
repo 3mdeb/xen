@@ -445,6 +445,26 @@ __pvh_start:
 
 #endif /* CONFIG_PVH_GUEST */
 
+        /*
+         * Entry point for TrenchBoot Secure Launch on Intel TXT platforms.
+         *
+         * CPU is in 32b protected mode with paging disabled. On entry:
+         * - %ebx = %ebp = SINIT physical base address
+         * - %edx = SENTER control flags
+         * - stack pointer is undefined
+         * - CS is flat 4GB code segment
+         * - DS, ES and SS are flat 4GB data segments
+         *
+         * Additional restrictions:
+         * - some MSRs are partially cleared, among them IA32_MISC_ENABLE, so
+         *   some capabilities might be reported as disabled even if they are
+         *   supported by CPU
+         * - interrupts (including NMIs and SMIs) are disabled and must be
+         *   enabled later
+         * - trying to enter real mode results in reset
+         * - APs must be brought up by MONITOR or GETSEC[WAKEUP], depending on
+         *   which is supported by a given SINIT ACM
+         */
 sl_stub_entry:
         movl    $SLAUNCH_BOOTLOADER_MAGIC,%eax
 
