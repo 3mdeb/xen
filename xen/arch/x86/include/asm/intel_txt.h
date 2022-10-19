@@ -267,6 +267,6 @@ static inline void *txt_sinit_mle_data_start(void *heap)
 		txt_sinit_mle_data_size(heap) + sizeof(uint64_t);
 }
 
-void protect_txt_mem_regions(void);
+extern void protect_txt_mem_regions(void);
 
 #endif /* __ASSEMBLY__ */

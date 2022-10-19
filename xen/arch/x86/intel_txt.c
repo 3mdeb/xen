@@ -4,7 +4,7 @@
 #include <asm/page.h>
 #include <asm/intel_txt.h>
 
-void protect_txt_mem_regions(void)
+void __init protect_txt_mem_regions(void)
 {
     uint64_t txt_heap_base, txt_heap_size;
     uint64_t sinit_base, sinit_size;
