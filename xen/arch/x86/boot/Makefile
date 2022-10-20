@@ -1,6 +1,6 @@
 obj-bin-y += head.o
 
-head-bin-objs := cmdline.o reloc.o
+head-bin-objs := cmdline.o reloc.o txt_early.o
 
 nocov-y   += $(head-bin-objs)
 noubsan-y += $(head-bin-objs)

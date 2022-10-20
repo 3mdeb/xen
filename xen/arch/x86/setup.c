@@ -1146,9 +1146,6 @@ void __init noreturn __start_xen(unsigned long mbi_p)
     /* Sanitise the raw E820 map to produce a final clean version. */
     max_page = raw_max_page = init_e820(memmap_type, &e820_raw);
 
-    if ( sl_status )
-        protect_txt_mem_regions();
-
     if ( !efi_enabled(EFI_BOOT) && e820_raw.nr_map >= 1 )
     {
         /*
@@ -1163,6 +1160,10 @@ void __init noreturn __start_xen(unsigned long mbi_p)
 
     /* Create a temporary copy of the E820 map. */
     memcpy(&boot_e820, &e820, sizeof(e820));
+
+    /* Reserve TXT heap and SINIT for Secure Launch path. */
+    if ( sl_status )
+        protect_txt_mem_regions();
 
     /* Early kexec reservation (explicit static start address). */
     nr_pages = 0;

@@ -55,6 +55,11 @@ If ``CONFIG_PVH_GUEST`` was selected at build time, an Elf note is included
 which indicates the ability to use the PVH boot protocol, and registers
 ``__pvh_start`` as the entrypoint, entered in 32bit mode.
 
+MLE header is used with Intel TXT, together with MB2 headers. Entrypoint is
+different, but it is used just to differentiate from other entries by moving
+a magic number to EAX. Execution environment is similar to that of Multiboot
+and code falls through to ``start``.
+
 
 xen.gz
 ~~~~~~

@@ -3,6 +3,7 @@
 #include <public/xen.h>
 #include <asm/asm_defns.h>
 #include <asm/fixmap.h>
+#include <asm/intel_txt.h>
 #include <asm/page.h>
 #include <asm/processor.h>
 #include <asm/msr-index.h>
@@ -121,7 +122,7 @@ mle_header:
         .long	0x42b651cb  /* UUID3 */
         .long   0x00000034  /* MLE header size */
         .long	0x00020002  /* MLE version 2.2 */
-        .long   sym_offs(sl_stub_entry)  /* Linear entry point of MLE (virt. address) */
+        .long   (sl_stub_entry - start)  /* Linear entry point of MLE (SINIT virt. address) */
         .long   0x00000000  /* First valid page of MLE */
         .long   0x00000000  /* Offset within binary of first byte of MLE */
         .long   0x00000000  /* Offset within binary of last byte + 1 of MLE */
@@ -397,19 +398,6 @@ cs32_switch:
         /* Jump to earlier loaded address. */
         jmp     *%edi
 
-
-sl_stub_entry:
-
-        /* Calculate the load base address. */
-        call    1f
-1:      pop     %esi
-        sub     $sym_offs(1b), %esi
-
-        /* Save information that TrenchBoot slaunch was used. */
-        movl $1, sym_esi(sl_status)
-
-        jmp __start
-
 #ifdef CONFIG_PVH_GUEST
 ELFNOTE(Xen, XEN_ELFNOTE_PHYS32_ENTRY, .long sym_offs(__pvh_start))
 
@@ -457,6 +445,31 @@ __pvh_start:
 
 #endif /* CONFIG_PVH_GUEST */
 
+        /*
+         * Entry point for TrenchBoot Secure Launch on Intel TXT platforms.
+         *
+         * CPU is in 32b protected mode with paging disabled. On entry:
+         * - %ebx = %ebp = SINIT physical base address
+         * - %edx = SENTER control flags
+         * - stack pointer is undefined
+         * - CS is flat 4GB code segment
+         * - DS, ES and SS are flat 4GB data segments
+         *
+         * Additional restrictions:
+         * - some MSRs are partially cleared, among them IA32_MISC_ENABLE, so
+         *   some capabilities might be reported as disabled even if they are
+         *   supported by CPU
+         * - interrupts (including NMIs and SMIs) are disabled and must be
+         *   enabled later
+         * - trying to enter real mode results in reset
+         * - APs must be brought up by MONITOR or GETSEC[WAKEUP], depending on
+         *   which is supported by a given SINIT ACM
+         */
+sl_stub_entry:
+        movl    $SLAUNCH_BOOTLOADER_MAGIC,%eax
+
+        /* Fall through to Multiboot entry point. */
+
 __start:
         cld
         cli
@@ -485,6 +498,10 @@ __start:
         /* Bootloaders may set multiboot{1,2}.mem_lower to a nonzero value. */
         xor     %edx,%edx
 
+        /* Check for TrenchBoot slaunch bootloader. */
+        cmp     $SLAUNCH_BOOTLOADER_MAGIC,%eax
+        je      .Lslaunch_proto
+
         /* Check for Multiboot2 bootloader. */
         cmp     $MULTIBOOT2_BOOTLOADER_MAGIC,%eax
         je      .Lmultiboot2_proto
@@ -499,6 +516,21 @@ __start:
         /* Not available? BDA value will be fine. */
         cmovnz  MB_mem_lower(%ebx),%edx
         jmp     trampoline_bios_setup
+
+.Lslaunch_proto:
+        /* Save information that TrenchBoot slaunch was used. */
+        movl $1, sym_esi(sl_status)
+
+        /* Pass load base address to txt_early_tests(). */
+        push    %esi
+        call    txt_early_tests
+
+        /*
+         * txt_early_tests() returns MBI address, move it to EBX, move magic
+         * number expected by Multiboot 2 to EAX and fall through.
+         */
+        movl    %eax,%ebx
+        movl    $MULTIBOOT2_BOOTLOADER_MAGIC,%eax
 
 .Lmultiboot2_proto:
         /* Skip Multiboot2 information fixed part. */
@@ -820,6 +852,10 @@ cmdline_parse_early:
         ALIGN
 reloc:
         .incbin "reloc.bin"
+
+        ALIGN
+txt_early_tests:
+        .incbin "txt_early.bin"
 
 ENTRY(trampoline_start)
 #include "trampoline.S"
