@@ -76,6 +76,8 @@
 
 #ifndef __ASSEMBLY__
 
+extern unsigned long sl_status;
+
 /*
  * Always use private space as some of registers are either read-only or not
  * present in public space.
@@ -267,6 +269,7 @@ static inline void *txt_sinit_mle_data_start(void *heap)
 		txt_sinit_mle_data_size(heap) + sizeof(uint64_t);
 }
 
-void protect_txt_mem_regions(void);
+extern void protect_txt_mem_regions(void);
+extern void txt_restore_mtrrs(bool e820_verbose);
 
 #endif /* __ASSEMBLY__ */

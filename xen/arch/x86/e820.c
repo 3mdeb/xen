@@ -11,6 +11,7 @@
 #include <asm/mtrr.h>
 #include <asm/msr.h>
 #include <asm/guest.h>
+#include <asm/intel_txt.h>
 
 /*
  * opt_mem: Limit maximum address of physical RAM.
@@ -454,6 +455,9 @@ static uint64_t __init mtrr_top_of_ram(void)
 
     rdmsrl(MSR_MTRRcap, mtrr_cap);
     rdmsrl(MSR_MTRRdefType, mtrr_def);
+
+    if ( sl_status )
+        txt_restore_mtrrs(e820_verbose);
 
     if ( e820_verbose )
         printk(" MTRR cap: %"PRIx64" type: %"PRIx64"\n", mtrr_cap, mtrr_def);

@@ -73,8 +73,6 @@ static bool __initdata opt_invpcid = true;
 boolean_param("invpcid", opt_invpcid);
 bool __read_mostly use_invpcid;
 
-unsigned long __initdata sl_status;
-
 unsigned long __read_mostly cr4_pv32_mask;
 
 /* **** Linux config option: propagated to domain0. */
@@ -1143,6 +1141,10 @@ void __init noreturn __start_xen(unsigned long mbi_p)
 #endif
     }
 
+    /* Reserve TXT heap and SINIT for Secure Launch path. */
+    if ( sl_status )
+        protect_txt_mem_regions();
+
     /* Sanitise the raw E820 map to produce a final clean version. */
     max_page = raw_max_page = init_e820(memmap_type, &e820_raw);
 
@@ -1160,10 +1162,6 @@ void __init noreturn __start_xen(unsigned long mbi_p)
 
     /* Create a temporary copy of the E820 map. */
     memcpy(&boot_e820, &e820, sizeof(e820));
-
-    /* Reserve TXT heap and SINIT for Secure Launch path. */
-    if ( sl_status )
-        protect_txt_mem_regions();
 
     /* Early kexec reservation (explicit static start address). */
     nr_pages = 0;
