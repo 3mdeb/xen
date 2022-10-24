@@ -15,6 +15,7 @@
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifdef __EARLY_TPM__
 /*
  * This entry point is entered from xen/arch/x86/boot/head.S with MBI base at
  * 0x4(%esp).
@@ -26,17 +27,19 @@ asm (
     "    jmp  tpm_extend_mbi           \n"
     );
 
-
-#ifdef __EARLY_TPM__
 #include "boot/defs.h"
-#else
-// TODO
+#include "include/asm/intel_txt.h"
+#ifdef __va
+#error "__va defined in non-paged mode!"
 #endif
+#define __va(x)     (x)
 
-#define DRTM_LOC                2
-#define DRTM_DATA_PCR           18
+#else   /* __EARLY_TPM__ */
 
-#define SHA1_DIGEST_SIZE        20
+#include <xen/types.h>
+#include <asm/intel_txt.h>
+
+#endif  /* __EARLY_TPM__ */
 
 #define TPM_TIS_BASE            0xFED40000
 #define TPM_LOC_REG(loc, reg)   (0x1000 * (loc) + (reg))
@@ -60,17 +63,17 @@ asm (
 
 static inline volatile uint32_t tis_read32(unsigned reg)
 {
-    return *(volatile uint32_t *)(TPM_TIS_BASE + reg);
+    return *(volatile uint32_t *)__va(TPM_TIS_BASE + reg);
 }
 
 static inline volatile uint8_t tis_read8(unsigned reg)
 {
-    return *(volatile uint8_t *)(TPM_TIS_BASE + reg);
+    return *(volatile uint8_t *)__va(TPM_TIS_BASE + reg);
 }
 
 static inline void tis_write8(unsigned reg, uint8_t val)
 {
-    *(volatile uint8_t *)(TPM_TIS_BASE + reg) = val;
+    *(volatile uint8_t *)__va(TPM_TIS_BASE + reg) = val;
 }
 
 /* TODO: check if locality was actually activated. */
@@ -187,12 +190,22 @@ union cmd_rsp {
     uint8_t buf[CMD_RSP_BUF_SIZE];
 };
 
-static void tpm_hash_extend(unsigned loc, uint8_t *buf, unsigned size,
-                            unsigned pcr)
+/*
+ * FIXME: when TPM does the hashing, we're heavily limited by bus bandwidth and
+ * number of sync cycles sent by TPM. In case of typical LPC running at 33MHz
+ * maximal theoretical bandwidth is 2.56MB/s, assuming there are no sync cycles
+ * above allowed minimum of one cycle. For 50MB kernel + initrd this adds at
+ * least 20 seconds to boot time. However, in testing TPM parses data slower,
+ * and just sending the data takes ~500s... In order to fix this, a hashing
+ * function must be implemented on host side, and extend command must be used.
+ */
+void tpm_hash_extend(unsigned loc, uint8_t *buf, unsigned size, unsigned pcr)
 {
     union cmd_rsp cmd_rsp;
     unsigned max_bytes = MAX_HASH_BLOCK;
     unsigned o_size = sizeof(cmd_rsp);
+
+    request_locality(loc);
 
     cmd_rsp.start_c = (struct sha1_start_cmd) {
         .h.tag = swap16(TPM_TAG_RQU_COMMAND),
@@ -246,15 +259,16 @@ static void tpm_hash_extend(unsigned loc, uint8_t *buf, unsigned size,
 
     // assert (o_size >= sizeof(struct sha1_complete_extend_rsp));
 
+    relinquish_locality(loc);
+
     /* TODO: figure out what to do with cmd_rsp.finish_r.hashValue. */
 }
 
 /************************** end of TPM1.2 specific ****************************/
 
+#ifdef __EARLY_TPM__
 void __stdcall tpm_extend_mbi(uint32_t *mbi)
 {
-    request_locality(DRTM_LOC);
-
     /*
      * TODO: after TPM2 is implemented, we should halt rather than continue
      * without measurements.
@@ -263,6 +277,5 @@ void __stdcall tpm_extend_mbi(uint32_t *mbi)
         /* MBI starts with uint32_t total_size. */
         tpm_hash_extend(DRTM_LOC, (uint8_t *)mbi, *mbi, DRTM_DATA_PCR);
     }
-
-    relinquish_locality(DRTM_LOC);
 }
+#endif
