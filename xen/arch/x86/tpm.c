@@ -26,7 +26,12 @@ asm (
     "    jmp  tpm_extend_mbi           \n"
     );
 
-#include "defs.h"
+
+#ifdef __EARLY_TPM__
+#include "boot/defs.h"
+#else
+// TODO
+#endif
 
 #define DRTM_LOC                2
 #define DRTM_DATA_PCR           18
