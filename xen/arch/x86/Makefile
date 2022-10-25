@@ -57,6 +57,7 @@ obj-$(CONFIG_COMPAT) += x86_64/physdev.o
 obj-y += psr.o
 obj-y += intel_txt.o
 obj-y += setup.o
+obj-y += sha1.o
 obj-y += shutdown.o
 obj-y += smp.o
 obj-y += smpboot.o
