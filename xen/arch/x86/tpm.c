@@ -32,12 +32,15 @@ asm (
 #ifdef __va
 #error "__va defined in non-paged mode!"
 #endif
-#define __va(x)     (x)
+#define __va(x)     _p(x)
 
 #else   /* __EARLY_TPM__ */
 
 #include <xen/types.h>
 #include <asm/intel_txt.h>
+
+void sha1_hash(const uint8_t message[], size_t len,
+               uint32_t hash[static SHA1_DIGEST_SIZE/sizeof(uint32_t)]);
 
 #endif  /* __EARLY_TPM__ */
 
@@ -120,7 +123,16 @@ static inline bool is_tpm12(void)
              (tis_read32(TPM_STS_(0)) & TPM_FAMILY_MASK) == 0);
 }
 
+static inline void *evt_log_base(void)
+{
+    struct txt_os_mle_data *os_mle;
+    os_mle = txt_os_mle_data_start(__va(read_txt_reg(TXTCR_HEAP_BASE)));
+
+    return __va(os_mle->evtlog_addr);
+}
+
 /****************************** TPM1.2 specific *******************************/
+#define TPM_ORD_Extend              0x00000014
 #define TPM_ORD_SHA1Start           0x000000A0
 #define TPM_ORD_SHA1Update          0x000000A1
 #define TPM_ORD_SHA1CompleteExtend  0x000000A3
@@ -139,6 +151,17 @@ struct tpm_rsp_hdr {
     uint16_t    tag;
     uint32_t    paramSize;
     uint32_t    returnCode;
+} __packed;
+
+struct extend_cmd {
+    struct tpm_cmd_hdr h;
+    uint32_t pcrNum;
+    uint8_t inDigest[SHA1_DIGEST_SIZE];
+} __packed;
+
+struct extend_rsp {
+    struct tpm_rsp_hdr h;
+    uint8_t outDigest[SHA1_DIGEST_SIZE];
 } __packed;
 
 struct sha1_start_cmd {
@@ -173,6 +196,28 @@ struct sha1_complete_extend_rsp {
     uint8_t outDigest[SHA1_DIGEST_SIZE];
 } __packed;
 
+struct TPM12_PCREvent {
+    uint32_t PCRIndex;
+    uint32_t Type;
+    uint8_t Digest[SHA1_DIGEST_SIZE];
+    uint32_t Size;
+    uint8_t Data[];
+};
+
+struct txt_ev_log_container_12 {
+    char        Signature[20];      /* "TXT Event Container", null-terminated */
+    uint8_t     Reserved[12];
+    uint8_t     ContainerVerMajor;
+    uint8_t     ContainerVerMinor;
+    uint8_t     PCREventVerMajor;
+    uint8_t     PCREventVerMinor;
+    uint32_t    ContainerSize;      /* Allocated size */
+    uint32_t    PCREventsOffset;
+    uint32_t    NextEventOffset;
+    struct TPM12_PCREvent   PCREvents[];
+};
+
+#ifdef __EARLY_TPM__
 /*
  * TPM1.2 is required to support commands of up to 1101 bytes, vendors rarely
  * go above that. Limit maximum size of block of data to be hashed to 1024.
@@ -190,16 +235,8 @@ union cmd_rsp {
     uint8_t buf[CMD_RSP_BUF_SIZE];
 };
 
-/*
- * FIXME: when TPM does the hashing, we're heavily limited by bus bandwidth and
- * number of sync cycles sent by TPM. In case of typical LPC running at 33MHz
- * maximal theoretical bandwidth is 2.56MB/s, assuming there are no sync cycles
- * above allowed minimum of one cycle. For 50MB kernel + initrd this adds at
- * least 20 seconds to boot time. However, in testing TPM parses data slower,
- * and just sending the data takes ~500s... In order to fix this, a hashing
- * function must be implemented on host side, and extend command must be used.
- */
-void tpm_hash_extend(unsigned loc, uint8_t *buf, unsigned size, unsigned pcr)
+static void tpm_hash_extend12(unsigned loc, uint8_t *buf, unsigned size,
+                              unsigned pcr, uint8_t *out_digest)
 {
     union cmd_rsp cmd_rsp;
     unsigned max_bytes = MAX_HASH_BLOCK;
@@ -261,21 +298,78 @@ void tpm_hash_extend(unsigned loc, uint8_t *buf, unsigned size, unsigned pcr)
 
     relinquish_locality(loc);
 
-    /* TODO: figure out what to do with cmd_rsp.finish_r.hashValue. */
+    memcpy(out_digest, cmd_rsp.finish_r.hashValue, SHA1_DIGEST_SIZE);
+}
+
+#else
+
+union cmd_rsp {
+    struct extend_cmd extend_c;
+    struct extend_rsp extend_r;
+};
+
+static void tpm_hash_extend12(unsigned loc, uint8_t *buf, unsigned size,
+                              unsigned pcr, uint8_t *out_digest)
+{
+    union cmd_rsp cmd_rsp;
+    unsigned o_size = sizeof(cmd_rsp);
+
+    sha1_hash(buf, size, (uint32_t *)out_digest);
+
+    request_locality(loc);
+
+    cmd_rsp.extend_c = (struct extend_cmd) {
+        .h.tag = swap16(TPM_TAG_RQU_COMMAND),
+        .h.paramSize = swap32(sizeof(struct extend_cmd)),
+        .h.ordinal = swap32(TPM_ORD_Extend),
+        .pcrNum = swap32(pcr),
+    };
+    memcpy(cmd_rsp.extend_c.inDigest, out_digest, SHA1_DIGEST_SIZE);
+
+    send_cmd(loc, (uint8_t *)&cmd_rsp, sizeof(struct extend_cmd), &o_size);
+
+    relinquish_locality(loc);
+}
+
+#endif /* __EARLY_TPM__ */
+
+static void *create_log_event12(uint32_t pcr, uint32_t type, uint8_t *data,
+                                unsigned data_size)
+{
+    struct txt_ev_log_container_12 *evt_log;
+    struct TPM12_PCREvent *new_entry;
+
+    evt_log = evt_log_base();
+    new_entry = (void *)(((uint8_t *)evt_log) + evt_log->NextEventOffset);
+    evt_log->NextEventOffset += sizeof(struct TPM12_PCREvent) + data_size;
+
+    new_entry->PCRIndex = pcr;
+    new_entry->Type = type;
+    new_entry->Size = data_size;
+
+    if (data && data_size > 0)
+        memcpy(new_entry->Data, data, data_size);
+
+    return new_entry->Digest;
 }
 
 /************************** end of TPM1.2 specific ****************************/
 
+void tpm_hash_extend(unsigned loc, unsigned pcr, uint8_t *buf, unsigned size,
+                     uint32_t type, uint8_t *log_data, unsigned log_data_size)
+{
+    if ( is_tpm12() ) {
+        void *entry_digest = create_log_event12(pcr, type, log_data,
+                                                log_data_size);
+        tpm_hash_extend12(loc, buf, size, pcr, entry_digest);
+    }
+}
+
 #ifdef __EARLY_TPM__
 void __stdcall tpm_extend_mbi(uint32_t *mbi)
 {
-    /*
-     * TODO: after TPM2 is implemented, we should halt rather than continue
-     * without measurements.
-     */
-    if ( is_tpm12() ) {
-        /* MBI starts with uint32_t total_size. */
-        tpm_hash_extend(DRTM_LOC, (uint8_t *)mbi, *mbi, DRTM_DATA_PCR);
-    }
+    /* MBI starts with uint32_t total_size. */
+    tpm_hash_extend(DRTM_LOC, DRTM_DATA_PCR, (uint8_t *)mbi, *mbi,
+                    TXT_EVTYPE_MBI, NULL, 0);
 }
 #endif
