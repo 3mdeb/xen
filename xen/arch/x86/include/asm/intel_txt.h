@@ -276,7 +276,7 @@ static inline void *txt_sinit_mle_data_start(void *heap)
 {
 	return heap + txt_bios_data_size(heap) +
 		txt_os_mle_data_size(heap) +
-		txt_sinit_mle_data_size(heap) + sizeof(uint64_t);
+		txt_os_sinit_data_size(heap) + sizeof(uint64_t);
 }
 
 extern void protect_txt_mem_regions(void);
