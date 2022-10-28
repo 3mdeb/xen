@@ -17,6 +17,7 @@
 #include <asm/guest.h>
 #include <asm/hpet.h>
 #include <asm/io_apic.h>
+#include <asm/intel_txt.h>
 #include <asm/p2m.h>
 #include <asm/setup.h>
 #include <asm/spec_ctrl.h>
@@ -584,6 +585,26 @@ int __init construct_dom0(struct domain *d, const module_t *image,
     BUG_ON(!pv_shim && d->domain_id != 0);
     BUG_ON(d->vcpu[0] == NULL);
     BUG_ON(d->vcpu[0]->is_initialised);
+
+    if ( sl_status ) {
+        /*
+         * Note: __start_xen() changed the meaning of mod_start and mod_end
+         * fields, they are now MFN and module length in bytes, respectively.
+         * For kernel, image_headroom was added both to mod_end and mod_start.
+         */
+        printk("Measuring dom0 kernel...\n");
+        tpm_hash_extend(DRTM_LOC, DRTM_CODE_PCR,
+                        __va(image->mod_start * PAGE_SIZE + image_headroom),
+                        image->mod_end - image_headroom, TXT_EVTYPE_KERNEL,
+                        NULL, 0);
+
+        process_pending_softirqs();
+
+        printk("Measuring dom0 initrd...\n");
+        tpm_hash_extend(DRTM_LOC, DRTM_CODE_PCR,
+                        __va(initrd->mod_start * PAGE_SIZE), initrd->mod_end,
+                        TXT_EVTYPE_INITRD, NULL, 0);
+    }
 
     process_pending_softirqs();
 

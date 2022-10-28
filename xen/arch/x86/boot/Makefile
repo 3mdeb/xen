@@ -1,6 +1,6 @@
 obj-bin-y += head.o
 
-head-bin-objs := cmdline.o reloc.o txt_early.o
+head-bin-objs := cmdline.o reloc.o txt_early.o tpm_early.o
 
 nocov-y   += $(head-bin-objs)
 noubsan-y += $(head-bin-objs)
@@ -28,6 +28,10 @@ LDFLAGS_DIRECT += $(LDFLAGS_DIRECT-y)
 
 %.bin: %.lnk
 	$(OBJCOPY) -j .text -O binary $< $@
+
+$(obj)/tpm_early.o: XEN_CFLAGS += -D__EARLY_TPM__
+$(obj)/tpm_early.o: $(src)/../tpm.c FORCE
+	$(call if_changed_rule,cc_o_c)
 
 %.lnk: %.o $(src)/build32.lds
 	$(LD) $(subst x86_64,i386,$(LDFLAGS_DIRECT)) -N -T $(filter %.lds,$^) -o $@ $<
