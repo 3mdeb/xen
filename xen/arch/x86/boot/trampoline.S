@@ -72,6 +72,26 @@ trampoline_protmode_entry:
         mov     $X86_CR4_PAE,%ecx
         mov     %ecx,%cr4
 
+        /*
+         * Get APIC ID while we're in non-paged mode. Start by checking if
+         * x2APIC is enabled.
+         */
+        mov     $MSR_APIC_BASE, %ecx
+        rdmsr
+        and     $APIC_BASE_EXTD, %eax
+        jnz     .Lx2apic
+
+        /* Not x2APIC, read from MMIO */
+        mov     0xfee00020, %esp
+        shr     $24, %esp
+        jmp     1f
+
+.Lx2apic:
+        mov     $(MSR_X2APIC_FIRST + (0x20 >> 4)), %ecx
+        rdmsr
+        mov     %eax, %esp
+1:
+
         /* Load pagetable base register. */
         mov     $sym_offs(idle_pg_table),%eax
         add     bootsym_rel(trampoline_xen_phys_start,4,%eax)
