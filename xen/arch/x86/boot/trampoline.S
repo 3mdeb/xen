@@ -59,6 +59,16 @@ GLOBAL(trampoline_realmode_entry)
         ljmpl   $BOOT_CS32,$bootsym_rel(trampoline_protmode_entry,6)
 
         .code32
+GLOBAL(txt_ap_entry)
+        /*
+         * APs enter here in protected mode without paging. GDT is set in JOIN
+         * structure, it points to trampoline_gdt. Interrupts are disabled by
+         * TXT (including NMI and SMI), so IDT doesn't matter at this point.
+         * The only missing point is telling that we are AP by saving non-zero
+         * value in EBX.
+         */
+        mov     $1, %ebx
+
 trampoline_protmode_entry:
         /* Set up a few descriptors: on entry only CS is guaranteed good. */
         mov     $BOOT_DS,%eax
@@ -143,7 +153,7 @@ start64:
         .word   0
 idt_48: .word   0, 0, 0 # base = limit = 0
 
-trampoline_gdt:
+GLOBAL(trampoline_gdt)
         .word   0                  /* 0x0000: unused (reused for GDTR) */
 gdt_48:
         .word   .Ltrampoline_gdt_end - trampoline_gdt - 1
@@ -154,6 +164,13 @@ gdt_48:
         .quad   0x00cf93000000ffff /* 0x0018: ring 0 data */
         .quad   0x00009b000000ffff /* 0x0020: real-mode code @ BOOT_TRAMPOLINE */
         .quad   0x000093000000ffff /* 0x0028: real-mode data @ BOOT_TRAMPOLINE */
+        /*
+         * Intel TXT requires these two in exact order. This isn't compatible
+         * with order required by syscall, so we have duplicated entries...
+         * If order ever changes, update selector numbers in asm/intel_txt.h.
+         */
+        .quad   0x00cf9b000000ffff /* 0x0030: ring 0 code, 32-bit mode */
+        .quad   0x00cf93000000ffff /* 0x0038: ring 0 data */
 .Ltrampoline_gdt_end:
 
         /* Relocations for trampoline Real Mode segments. */

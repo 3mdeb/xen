@@ -74,9 +74,15 @@
 
 #define SLAUNCH_BOOTLOADER_MAGIC	0x4c534254
 
+#define TXT_AP_BOOT_CS			0x0030
+#define TXT_AP_BOOT_DS			0x0038
+
 #ifndef __ASSEMBLY__
 
 extern unsigned long sl_status;
+
+extern char txt_ap_entry[];
+extern uint32_t trampoline_gdt[];
 
 /* We need to differentiate between pre- and post paging enabled. */
 #ifdef __BOOT_DEFS_H__
