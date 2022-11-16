@@ -84,23 +84,22 @@ extern unsigned long sl_status;
 #else
 #include <xen/types.h>
 #include <asm/page.h>	// __va()
-#include <xen/lib.h>	// _p()
-#define _txt(x) _p(__va(x))
+#define _txt(x) __va(x)
 #endif
 
 /*
  * Always use private space as some of registers are either read-only or not
  * present in public space.
  */
-static inline volatile uint32_t read_txt_reg(int reg_no)
+static inline volatile uint64_t read_txt_reg(int reg_no)
 {
-	volatile uint32_t *reg = _txt(TXT_PRIV_CONFIG_REGS_BASE + reg_no);
+	volatile uint64_t *reg = _txt(TXT_PRIV_CONFIG_REGS_BASE + reg_no);
 	return *reg;
 }
 
-static inline void write_txt_reg(int reg_no, uint32_t val)
+static inline void write_txt_reg(int reg_no, uint64_t val)
 {
-	volatile uint32_t *reg = _txt(TXT_PRIV_CONFIG_REGS_BASE + reg_no);
+	volatile uint64_t *reg = _txt(TXT_PRIV_CONFIG_REGS_BASE + reg_no);
 	*reg = val;
 	/* This serves as TXT register barrier */
 	(void)read_txt_reg(TXTCR_ESTS);
