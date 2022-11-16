@@ -36,6 +36,8 @@ asm (
 
 #else   /* __EARLY_TPM__ */
 
+#include <xen/mm.h>
+#include <xen/pfn.h>
 #include <xen/types.h>
 #include <asm/intel_txt.h>
 
@@ -123,12 +125,13 @@ static inline bool is_tpm12(void)
              (tis_read32(TPM_STS_(0)) & TPM_FAMILY_MASK) == 0);
 }
 
-static inline void *evt_log_base(void)
+static inline void find_evt_log(void **evt_log, uint32_t *evt_log_size)
 {
     struct txt_os_mle_data *os_mle;
     os_mle = txt_os_mle_data_start(__va(read_txt_reg(TXTCR_HEAP_BASE)));
 
-    return __va(os_mle->evtlog_addr);
+    *evt_log = __va(os_mle->evtlog_addr);
+    *evt_log_size = os_mle->evtlog_size;
 }
 
 /****************************** TPM1.2 specific *******************************/
@@ -298,7 +301,8 @@ static void tpm_hash_extend12(unsigned loc, uint8_t *buf, unsigned size,
 
     relinquish_locality(loc);
 
-    memcpy(out_digest, cmd_rsp.finish_r.hashValue, SHA1_DIGEST_SIZE);
+    if ( out_digest != NULL )
+        memcpy(out_digest, cmd_rsp.finish_r.hashValue, SHA1_DIGEST_SIZE);
 }
 
 #else
@@ -324,7 +328,9 @@ static void tpm_hash_extend12(unsigned loc, uint8_t *buf, unsigned size,
         .h.ordinal = swap32(TPM_ORD_Extend),
         .pcrNum = swap32(pcr),
     };
-    memcpy(cmd_rsp.extend_c.inDigest, out_digest, SHA1_DIGEST_SIZE);
+
+    if ( out_digest != NULL )
+        memcpy(cmd_rsp.extend_c.inDigest, out_digest, SHA1_DIGEST_SIZE);
 
     send_cmd(loc, (uint8_t *)&cmd_rsp, sizeof(struct extend_cmd), &o_size);
 
@@ -333,14 +339,25 @@ static void tpm_hash_extend12(unsigned loc, uint8_t *buf, unsigned size,
 
 #endif /* __EARLY_TPM__ */
 
-static void *create_log_event12(uint32_t pcr, uint32_t type, uint8_t *data,
+static void *create_log_event12(struct txt_ev_log_container_12 *evt_log,
+                                uint32_t evt_log_size, uint32_t pcr,
+                                uint32_t type, uint8_t *data,
                                 unsigned data_size)
 {
-    struct txt_ev_log_container_12 *evt_log;
     struct TPM12_PCREvent *new_entry;
 
-    evt_log = evt_log_base();
     new_entry = (void *)(((uint8_t *)evt_log) + evt_log->NextEventOffset);
+
+    /*
+     * Check if there is enough space left for new entry.
+     * Note: it is possible to introduce a gap in event log if entry with big
+     * data_size is followed by another entry with smaller data. Maybe we should
+     * cap the event log size in such case?
+     */
+    if ( evt_log->NextEventOffset + sizeof(struct TPM12_PCREvent) + data_size
+         > evt_log_size )
+        return NULL;
+
     evt_log->NextEventOffset += sizeof(struct TPM12_PCREvent) + data_size;
 
     new_entry->PCRIndex = pcr;
@@ -358,11 +375,31 @@ static void *create_log_event12(uint32_t pcr, uint32_t type, uint8_t *data,
 void tpm_hash_extend(unsigned loc, unsigned pcr, uint8_t *buf, unsigned size,
                      uint32_t type, uint8_t *log_data, unsigned log_data_size)
 {
+    void *evt_log_addr;
+    uint32_t evt_log_size;
+
+    find_evt_log(&evt_log_addr, &evt_log_size);
+
+#ifndef __EARLY_TPM__
+    /*
+     * Low mappings are destroyed somewhere during the boot process, it includes
+     * event log (marked as reserved by protect_txt_mem_regions().
+     */
+     map_pages_to_xen((unsigned long)evt_log_addr, maddr_to_mfn(__pa(evt_log_addr)),
+                      PFN_UP(evt_log_size), __PAGE_HYPERVISOR_RW);
+#endif
+
     if ( is_tpm12() ) {
-        void *entry_digest = create_log_event12(pcr, type, log_data,
-                                                log_data_size);
+        struct txt_ev_log_container_12 *evt_log = evt_log_addr;
+        void *entry_digest = create_log_event12(evt_log, evt_log_size, pcr,
+                                                type, log_data, log_data_size);
         tpm_hash_extend12(loc, buf, size, pcr, entry_digest);
     }
+
+#ifndef __EARLY_TPM__
+    destroy_xen_mappings((unsigned long)evt_log_addr,
+                         (unsigned long)evt_log_addr + PFN_UP(evt_log_size) * PAGE_SIZE);
+#endif
 }
 
 #ifdef __EARLY_TPM__

@@ -65,52 +65,59 @@ static int unmap_l2(unsigned long paddr, unsigned long size)
 void __init protect_txt_mem_regions(void)
 {
     uint64_t sinit_base, sinit_size;
-    int rc;
 
     map_l2(TXT_PUB_CONFIG_REGS_BASE, NR_TXT_CONFIG_PAGES * PAGE_SIZE);
 
     txt_heap_base = txt_heap_size = sinit_base = sinit_size = 0;
+
     /* TXT Heap */
-    memcpy(&txt_heap_base, __va(TXT_PUB_CONFIG_REGS_BASE + TXTCR_HEAP_BASE),
-           sizeof(txt_heap_base));
-    memcpy(&txt_heap_size, __va(TXT_PUB_CONFIG_REGS_BASE + TXTCR_HEAP_SIZE),
-           sizeof(txt_heap_size));
+    txt_heap_base = read_txt_reg(TXTCR_HEAP_BASE);
+    txt_heap_size = read_txt_reg(TXTCR_HEAP_SIZE);
     /* SINIT */
-    memcpy(&sinit_base, __va(TXT_PUB_CONFIG_REGS_BASE + TXTCR_SINIT_BASE),
-           sizeof(sinit_base));
-    memcpy(&sinit_size, __va(TXT_PUB_CONFIG_REGS_BASE + TXTCR_SINIT_SIZE),
-           sizeof(sinit_size));
+    sinit_base = read_txt_reg(TXTCR_SINIT_BASE);
+    sinit_size = read_txt_reg(TXTCR_SINIT_SIZE);
 
     /* Remove mapping of TXT register space. */
     unmap_l2(TXT_PUB_CONFIG_REGS_BASE, NR_TXT_CONFIG_PAGES * PAGE_SIZE);
 
     /* TXT Heap */
     if ( txt_heap_base != 0 ) {
+        struct txt_os_mle_data *os_mle;
+
         printk("SLAUNCH: reserving TXT heap (%#lx - %#lx)\n", txt_heap_base,
                txt_heap_base + txt_heap_size);
-        rc = e820_change_range_type(&e820, txt_heap_base,
-                                    txt_heap_base + txt_heap_size,
-                                    E820_RESERVED, E820_UNUSABLE);
-        if ( !rc )
-            return;
+        e820_change_range_type(&e820_raw, txt_heap_base,
+                               txt_heap_base + txt_heap_size,
+                               E820_RAM, E820_RESERVED);
+
+        /* TXT TPM Event Log */
+        map_l2(txt_heap_base, txt_heap_size);
+        os_mle = txt_os_mle_data_start(__va(txt_heap_base));
+
+        if ( os_mle->evtlog_addr != 0 ) {
+            printk("SLAUNCH: reserving event log (%#lx - %#lx)\n", os_mle->evtlog_addr,
+                   os_mle->evtlog_addr + os_mle->evtlog_size);
+            e820_change_range_type(&e820_raw, os_mle->evtlog_addr,
+                                   os_mle->evtlog_addr + os_mle->evtlog_size,
+                                   E820_RAM, E820_RESERVED);
+        }
+
+        unmap_l2(txt_heap_base, txt_heap_size);
     }
 
     /* SINIT */
     if ( sinit_base != 0 ) {
         printk("SLAUNCH: reserving SINIT memory (%#lx - %#lx)\n", sinit_base,
                sinit_base + sinit_size);
-        rc = e820_change_range_type(&e820, sinit_base,
-                                    sinit_base + sinit_size,
-                                    E820_RESERVED, E820_UNUSABLE);
-        if ( !rc )
-            return;
+        e820_change_range_type(&e820_raw, sinit_base,
+                               sinit_base + sinit_size,
+                               E820_RAM, E820_RESERVED);
     }
 
     /* TXT Private Space */
-    rc = e820_change_range_type(&e820, TXT_PRIV_CONFIG_REGS_BASE,
+    e820_change_range_type(&e820_raw, TXT_PRIV_CONFIG_REGS_BASE,
                  TXT_PRIV_CONFIG_REGS_BASE + NR_TXT_CONFIG_PAGES * PAGE_SIZE,
-                 E820_RESERVED, E820_UNUSABLE);
-    return;
+                 E820_RAM, E820_UNUSABLE);
 }
 
 void __init txt_restore_mtrrs(bool e820_verbose)

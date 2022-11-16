@@ -74,9 +74,15 @@
 
 #define SLAUNCH_BOOTLOADER_MAGIC	0x4c534254
 
+#define TXT_AP_BOOT_CS			0x0030
+#define TXT_AP_BOOT_DS			0x0038
+
 #ifndef __ASSEMBLY__
 
 extern unsigned long sl_status;
+
+extern char txt_ap_entry[];
+extern uint32_t trampoline_gdt[];
 
 /* We need to differentiate between pre- and post paging enabled. */
 #ifdef __BOOT_DEFS_H__
@@ -84,23 +90,22 @@ extern unsigned long sl_status;
 #else
 #include <xen/types.h>
 #include <asm/page.h>	// __va()
-#include <xen/lib.h>	// _p()
-#define _txt(x) _p(__va(x))
+#define _txt(x) __va(x)
 #endif
 
 /*
  * Always use private space as some of registers are either read-only or not
  * present in public space.
  */
-static inline volatile uint32_t read_txt_reg(int reg_no)
+static inline volatile uint64_t read_txt_reg(int reg_no)
 {
-	volatile uint32_t *reg = _txt(TXT_PRIV_CONFIG_REGS_BASE + reg_no);
+	volatile uint64_t *reg = _txt(TXT_PRIV_CONFIG_REGS_BASE + reg_no);
 	return *reg;
 }
 
-static inline void write_txt_reg(int reg_no, uint32_t val)
+static inline void write_txt_reg(int reg_no, uint64_t val)
 {
-	volatile uint32_t *reg = _txt(TXT_PRIV_CONFIG_REGS_BASE + reg_no);
+	volatile uint64_t *reg = _txt(TXT_PRIV_CONFIG_REGS_BASE + reg_no);
 	*reg = val;
 	/* This serves as TXT register barrier */
 	(void)read_txt_reg(TXTCR_ESTS);
@@ -276,7 +281,7 @@ static inline void *txt_sinit_mle_data_start(void *heap)
 {
 	return heap + txt_bios_data_size(heap) +
 		txt_os_mle_data_size(heap) +
-		txt_sinit_mle_data_size(heap) + sizeof(uint64_t);
+		txt_os_sinit_data_size(heap) + sizeof(uint64_t);
 }
 
 extern void protect_txt_mem_regions(void);
