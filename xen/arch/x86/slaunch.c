@@ -9,9 +9,11 @@
 #include <xen/macros.h>
 #include <xen/mm.h>
 #include <xen/types.h>
+#include <asm/bootinfo.h>
 #include <asm/e820.h>
 #include <asm/intel-txt.h>
 #include <asm/page.h>
+#include <asm/processor.h>
 #include <asm/slaunch.h>
 #include <asm/tpm.h>
 
@@ -104,6 +106,217 @@ void __init slaunch_reserve_mem_regions(void)
         rc = reserve_e820_ram(&e820_raw, (uint64_t)evt_log_addr,
                               (uint64_t)evt_log_addr + evt_log_size);
         BUG_ON(rc == 0);
+    }
+}
+
+void __init slaunch_measure_slrt(void)
+{
+    struct slr_table *slrt = slaunch_get_slrt();
+
+    if ( slrt->revision == 1 )
+    {
+        /*
+         * In revision one of the SLRT, only platform-specific info table is
+         * measured.
+         */
+        struct slr_entry_intel_info tmp;
+        struct slr_entry_intel_info *entry;
+
+        entry = (struct slr_entry_intel_info *)
+            slr_next_entry_by_tag(slrt, NULL, SLR_ENTRY_INTEL_INFO);
+        if ( entry == NULL )
+            panic("SLRT is missing Intel-specific information!\n");
+
+        tmp = *entry;
+        tmp.boot_params_base = 0;
+        tmp.txt_heap = 0;
+
+        tpm_hash_extend(DRTM_LOC, DRTM_DATA_PCR, (uint8_t *)&tmp,
+                        sizeof(tmp), DLE_EVTYPE_SLAUNCH, NULL, 0);
+    }
+    else
+    {
+        /*
+         * slaunch_get_slrt() checks that the revision is valid, so we must not get
+         * here unless the code is wrong.
+         */
+        panic("Unhandled SLRT revision: %d!\n", slrt->revision);
+    }
+}
+
+static const struct slr_entry_policy *__init
+slr_get_policy(const struct slr_table *slrt)
+{
+    struct slr_entry_policy *policy;
+
+    policy = (struct slr_entry_policy *)
+        slr_next_entry_by_tag(slrt, NULL, SLR_ENTRY_DRTM_POLICY);
+    if (policy == NULL)
+        panic("SLRT is missing DRTM policy!\n");
+
+    /* XXX: are newer revisions allowed? */
+    if ( policy->revision != SLR_POLICY_REVISION )
+        panic("DRTM policy in SLRT is of unsupported revision: %#04x!\n",
+              slrt->revision);
+
+    return policy;
+}
+
+static void __init
+check_slrt_policy_entry(struct slr_policy_entry *policy_entry,
+                        int idx,
+                        const struct slr_table *slrt)
+{
+    if ( policy_entry->entity_type != SLR_ET_SLRT )
+        panic("Expected DRTM policy entry #%d to describe SLRT, got %#04x!\n",
+              idx, policy_entry->entity_type);
+    if ( policy_entry->pcr != DRTM_DATA_PCR )
+        panic("SLRT was measured to PCR-%d instead of PCR-%d!\n", DRTM_DATA_PCR,
+              policy_entry->pcr);
+    if ( policy_entry->entity != (uint64_t)__pa(slrt) )
+        panic("SLRT address (%#08lx) differs from its DRTM entry (%#08lx)\n",
+              __pa(slrt), policy_entry->entity);
+}
+
+/* Returns number of policy entries that were already measured. */
+static unsigned int __init
+check_drtm_policy(const struct slr_table *slrt,
+                  const struct slr_entry_policy *policy,
+                  struct slr_policy_entry *policy_entry,
+                  const struct boot_info *bi)
+{
+    uint32_t i;
+    uint32_t num_mod_entries;
+
+    if ( policy->nr_entries < 2 )
+        panic("DRTM policy in SLRT contains less than 2 entries (%d)!\n",
+              policy->nr_entries);
+
+    /*
+     * MBI policy entry must be the first one, so that measuring order matches
+     * policy order.
+     */
+    if ( policy_entry[0].entity_type != SLR_ET_MULTIBOOT2_INFO )
+        panic("First entry of DRTM policy in SLRT is not MBI: %#04x!\n",
+              policy_entry[0].entity_type);
+    if ( policy_entry[0].pcr != DRTM_DATA_PCR )
+        panic("MBI was measured to %d instead of %d PCR!\n", DRTM_DATA_PCR,
+              policy_entry[0].pcr);
+
+    /* SLRT policy entry must be the second one. */
+    check_slrt_policy_entry(&policy_entry[1], 1, slrt);
+
+    for ( i = 0; i < bi->nr_modules; i++ )
+    {
+        uint16_t j;
+        const struct boot_module *mod = &bi->mods[i];
+
+        if (mod->relocated || mod->released)
+        {
+            panic("Multiboot module \"%s\" (at %d) was consumed before measurement\n",
+                  (const char *)__va(mod->cmdline_pa), i);
+        }
+
+        for ( j = 2; j < policy->nr_entries; j++ )
+        {
+            if ( policy_entry[j].entity_type != SLR_ET_MULTIBOOT2_MODULE )
+                continue;
+
+            if ( policy_entry[j].entity == mod->start &&
+                 policy_entry[j].size == mod->size )
+                break;
+        }
+
+        if ( j >= policy->nr_entries )
+        {
+            panic("Couldn't find Multiboot module \"%s\" (at %d) in DRTM of Secure Launch\n",
+                  (const char *)__va(mod->cmdline_pa), i);
+        }
+    }
+
+    num_mod_entries = 0;
+    for ( i = 0; i < policy->nr_entries; i++ )
+    {
+        if ( policy_entry[i].entity_type == SLR_ET_MULTIBOOT2_MODULE )
+            num_mod_entries++;
+    }
+
+    if ( bi->nr_modules != num_mod_entries )
+    {
+        panic("Unexpected number of Multiboot modules: %d instead of %d\n",
+              (int)bi->nr_modules, (int)num_mod_entries);
+    }
+
+    /*
+     * MBI was measured in tpm_extend_mbi().
+     * SLRT was measured in tpm_measure_slrt().
+     */
+    return 2;
+}
+
+void __init slaunch_process_drtm_policy(const struct boot_info *bi)
+{
+    const struct slr_table *slrt;
+    const struct slr_entry_policy *policy;
+    struct slr_policy_entry *policy_entry;
+    uint16_t i;
+    unsigned int measured;
+
+    slrt = slaunch_get_slrt();
+
+    policy = slr_get_policy(slrt);
+    policy_entry = (void *)policy + sizeof(*policy);
+
+    measured = check_drtm_policy(slrt, policy, policy_entry, bi);
+    for ( i = 0; i < measured; i++ )
+        policy_entry[i].flags |= SLR_POLICY_FLAG_MEASURED;
+
+    for ( i = measured; i < policy->nr_entries; i++ )
+    {
+        int rc;
+        uint64_t start = policy_entry[i].entity;
+        uint64_t size = policy_entry[i].size;
+
+        /* No already measured entries are expected here. */
+        if ( policy_entry[i].flags & SLR_POLICY_FLAG_MEASURED )
+            panic("DRTM entry at %d was measured out of order!\n", i);
+
+        switch ( policy_entry[i].entity_type )
+        {
+        case SLR_ET_MULTIBOOT2_INFO:
+            panic("Duplicated MBI entry in DRTM of Secure Launch at %d\n", i);
+        case SLR_ET_SLRT:
+            panic("Duplicated SLRT entry in DRTM of Secure Launch at %d\n", i);
+
+        case SLR_ET_UNSPECIFIED:
+        case SLR_ET_BOOT_PARAMS:
+        case SLR_ET_SETUP_DATA:
+        case SLR_ET_CMDLINE:
+        case SLR_ET_UEFI_MEMMAP:
+        case SLR_ET_RAMDISK:
+        case SLR_ET_MULTIBOOT2_MODULE:
+        case SLR_ET_TXT_OS2MLE:
+            /* Measure this entry below. */
+            break;
+
+        case SLR_ET_UNUSED:
+            /* Skip this entry. */
+            continue;
+        }
+
+        if ( policy_entry[i].flags & SLR_POLICY_IMPLICIT_SIZE )
+            panic("Unexpected implicitly-sized DRTM entry of Secure Launch at %d (type %d, info: %s)\n",
+                  i, policy_entry[i].entity_type, policy_entry[i].evt_info);
+
+        rc = slaunch_map_l2(start, size);
+        BUG_ON(rc != 0);
+
+        tpm_hash_extend(DRTM_LOC, policy_entry[i].pcr, __va(start), size,
+                        DLE_EVTYPE_SLAUNCH, (uint8_t *)policy_entry[i].evt_info,
+                        strnlen(policy_entry[i].evt_info,
+                                TPM_EVENT_INFO_LENGTH));
+
+        policy_entry[i].flags |= SLR_POLICY_FLAG_MEASURED;
     }
 }
 

@@ -24,6 +24,8 @@
 #define DLE_EVTYPE_SLAUNCH_START   (DLE_EVTYPE_BASE + 0x103)
 #define DLE_EVTYPE_SLAUNCH_END     (DLE_EVTYPE_BASE + 0x104)
 
+struct boot_info;
+
 /* Indicates an active Secure Launch boot. */
 extern bool slaunch_active;
 
@@ -68,6 +70,18 @@ void slaunch_map_mem_regions(void);
 
 /* Marks regions of memory as used to avoid their corruption. */
 void slaunch_reserve_mem_regions(void);
+
+/* Measures essential parts of SLR table before making use of them. */
+void slaunch_measure_slrt(void);
+
+/*
+ * Takes measurements of DRTM policy entries except for MBI and SLRT which
+ * should have been measured by the time this is called. Also performs sanity
+ * checks of the policy and panics on failure. In particular, the function
+ * verifies that DRTM is consistent with modules obtained from MultibootInfo
+ * (MBI) and written to struct boot_info in setup.c.
+ */
+void slaunch_process_drtm_policy(const struct boot_info *bi);
 
 /*
  * This helper function is used to map memory using L2 page tables by aligning

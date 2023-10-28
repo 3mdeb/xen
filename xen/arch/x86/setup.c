@@ -1435,6 +1435,13 @@ void asmlinkage __init noreturn __start_xen(void)
     if ( slaunch_active )
     {
         slaunch_map_mem_regions();
+
+        /*
+         * SLRT needs to be measured here because it is used by init_e820(), the
+         * rest is measured slightly below by slaunch_process_drtm_policy().
+         */
+        slaunch_measure_slrt();
+
         slaunch_reserve_mem_regions();
     }
 
@@ -1455,6 +1462,14 @@ void asmlinkage __init noreturn __start_xen(void)
 
     /* Create a temporary copy of the E820 map. */
     memcpy(&boot_e820, &e820, sizeof(e820));
+
+    /*
+     * Process all yet unmeasured DRTM entries after E820 initialization to not
+     * do this while memory is uncached (too slow). This must also happen before
+     * modules are relocated or used.
+     */
+    if ( slaunch_active )
+        slaunch_process_drtm_policy(bi);
 
     /* Early kexec reservation (explicit static start address). */
     nr_pages = 0;
