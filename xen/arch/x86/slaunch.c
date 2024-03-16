@@ -17,6 +17,10 @@
 #include <asm/slaunch.h>
 #include <asm/tpm.h>
 
+/* SLB is 64k, 64k-aligned */
+#define SKINIT_SLB_SIZE   0x10000
+#define SKINIT_SLB_ALIGN  0x10000
+
 /*
  * These variables are assigned to by the code near Xen's entry point.
  *
@@ -39,6 +43,8 @@ struct slr_table *__init slaunch_get_slrt(void)
 
     if (slrt == NULL) {
         int rc;
+        bool intel_cpu = (boot_cpu_data.x86_vendor == X86_VENDOR_INTEL);
+        uint16_t slrt_architecture = intel_cpu ? SLR_INTEL_TXT : SLR_AMD_SKINIT;
 
         slrt = __va(slaunch_slrt);
 
@@ -50,9 +56,9 @@ struct slr_table *__init slaunch_get_slrt(void)
         /* XXX: are newer revisions allowed? */
         if ( slrt->revision != SLR_TABLE_REVISION )
             panic("SLRT is of unsupported revision: %#04x!\n", slrt->revision);
-        if ( slrt->architecture != SLR_INTEL_TXT )
-            panic("SLRT is for unexpected architecture: %#04x!\n",
-                  slrt->architecture);
+        if ( slrt->architecture != slrt_architecture )
+            panic("SLRT is for unexpected architecture: %#04x != %#04x!\n",
+                  slrt->architecture, slrt_architecture);
         if ( slrt->size > slrt->max_size )
             panic("SLRT is larger than its max size: %#08x > %#08x!\n",
                   slrt->size, slrt->max_size);
@@ -67,6 +73,23 @@ struct slr_table *__init slaunch_get_slrt(void)
     return slrt;
 }
 
+static uint32_t __init get_slb_start(void)
+{
+    /*
+     * The runtime computation relies on size being a power of 2 and equal to
+     * alignment. Make sure these assumptions hold.
+     */
+    BUILD_BUG_ON(SKINIT_SLB_SIZE != SKINIT_SLB_ALIGN);
+    BUILD_BUG_ON(SKINIT_SLB_SIZE == 0);
+    BUILD_BUG_ON((SKINIT_SLB_SIZE & (SKINIT_SLB_SIZE - 1)) != 0);
+
+    /*
+     * Rounding any address within SLB down to alignment gives SLB base and
+     * SLRT is inside SLB on AMD.
+     */
+    return slaunch_slrt & ~(SKINIT_SLB_SIZE - 1);
+}
+
 void __init slaunch_map_mem_regions(void)
 {
     int rc;
@@ -77,7 +100,10 @@ void __init slaunch_map_mem_regions(void)
     BUG_ON(rc != 0);
 
     /* Vendor-specific part. */
-    txt_map_mem_regions();
+    if ( boot_cpu_data.x86_vendor == X86_VENDOR_INTEL )
+        txt_map_mem_regions();
+    else if ( boot_cpu_data.x86_vendor == X86_VENDOR_AMD )
+        slaunch_map_l2(get_slb_start(), SKINIT_SLB_SIZE);
 
     find_evt_log(slaunch_get_slrt(), &evt_log_addr, &evt_log_size);
     if ( evt_log_addr != NULL )
@@ -95,7 +121,18 @@ void __init slaunch_reserve_mem_regions(void)
     uint32_t evt_log_size;
 
     /* Vendor-specific part. */
-    txt_reserve_mem_regions();
+    if ( boot_cpu_data.x86_vendor == X86_VENDOR_INTEL )
+    {
+        txt_reserve_mem_regions();
+    }
+    else if ( boot_cpu_data.x86_vendor == X86_VENDOR_AMD )
+    {
+        uint64_t slb_start = get_slb_start();
+        uint64_t slb_end = slb_start + SKINIT_SLB_SIZE;
+        printk("SLAUNCH: reserving SLB (%#lx - %#lx)\n", slb_start, slb_end);
+        rc = reserve_e820_ram(&e820_raw, slb_start, slb_end);
+        BUG_ON(rc == 0);
+    }
 
     find_evt_log(slaunch_get_slrt(), &evt_log_addr, &evt_log_size);
     if ( evt_log_addr != NULL )
@@ -119,20 +156,41 @@ void __init slaunch_measure_slrt(void)
          * In revision one of the SLRT, only platform-specific info table is
          * measured.
          */
-        struct slr_entry_intel_info tmp;
-        struct slr_entry_intel_info *entry;
+        if ( boot_cpu_data.x86_vendor == X86_VENDOR_INTEL )
+        {
+            struct slr_entry_intel_info tmp;
+            struct slr_entry_intel_info *entry;
 
-        entry = (struct slr_entry_intel_info *)
-            slr_next_entry_by_tag(slrt, NULL, SLR_ENTRY_INTEL_INFO);
-        if ( entry == NULL )
-            panic("SLRT is missing Intel-specific information!\n");
+            entry = (struct slr_entry_intel_info *)
+                slr_next_entry_by_tag(slrt, NULL, SLR_ENTRY_INTEL_INFO);
+            if ( entry == NULL )
+                panic("SLRT is missing Intel-specific information!\n");
 
-        tmp = *entry;
-        tmp.boot_params_base = 0;
-        tmp.txt_heap = 0;
+            tmp = *entry;
+            tmp.boot_params_base = 0;
+            tmp.txt_heap = 0;
 
-        tpm_hash_extend(DRTM_LOC, DRTM_DATA_PCR, (uint8_t *)&tmp,
-                        sizeof(tmp), DLE_EVTYPE_SLAUNCH, NULL, 0);
+            tpm_hash_extend(DRTM_LOC, DRTM_DATA_PCR, (uint8_t *)&tmp,
+                            sizeof(tmp), DLE_EVTYPE_SLAUNCH, NULL, 0);
+        }
+        else if ( boot_cpu_data.x86_vendor == X86_VENDOR_AMD )
+        {
+            struct slr_entry_amd_info tmp;
+            struct slr_entry_amd_info *entry;
+
+            entry = (struct slr_entry_amd_info *)
+                slr_next_entry_by_tag(slrt, NULL, SLR_ENTRY_AMD_INFO);
+            if ( entry == NULL )
+                panic("SLRT is missing AMD-specific information!\n");
+
+            tmp = *entry;
+            tmp.next = 0;
+            tmp.slrt_base = 0;
+            tmp.boot_params_base = 0;
+
+            tpm_hash_extend(DRTM_LOC, DRTM_DATA_PCR, (uint8_t *)&tmp,
+                            sizeof(tmp), DLE_EVTYPE_SLAUNCH, NULL, 0);
+        }
     }
     else
     {
