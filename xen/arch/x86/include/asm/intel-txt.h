@@ -94,6 +94,11 @@
 #define TXT_AP_BOOT_CS                  0x0030
 #define TXT_AP_BOOT_DS                  0x0038
 
+/* EAX value for GETSEC leaf functions. Intel SDM: GETSEC[CAPABILITIES] */
+#define GETSEC_CAPABILITIES             0
+/* Intel SDM: GETSEC Capability Result Encoding */
+#define GETSEC_CAP_TXT_CHIPSET          1
+
 #ifndef __ASSEMBLY__
 
 #include <xen/slr-table.h>

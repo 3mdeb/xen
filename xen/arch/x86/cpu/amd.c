@@ -718,6 +718,21 @@ void amd_process_freq(const struct cpuinfo_x86 *c,
 		*low_mhz = amd_parse_freq(c->x86, lo);
 }
 
+void amd_log_skinit(const struct cpuinfo_x86 *c)
+{
+    /*
+     * Run only on BSP and not during resume to report the capability only once.
+     */
+    if ( system_state != SYS_STATE_resume && smp_processor_id() )
+        return;
+
+    printk("CPU: SKINIT capability ");
+    if ( !test_bit(X86_FEATURE_SKINIT, &boot_cpu_data.x86_capability) )
+        printk("not supported\n");
+    else
+        printk("supported\n");
+}
+
 void cf_check early_init_amd(struct cpuinfo_x86 *c)
 {
 	if (c == &boot_cpu_data)
@@ -1387,6 +1402,7 @@ static void cf_check init_amd(struct cpuinfo_x86 *c)
 	check_syscfg_dram_mod_en();
 
 	amd_log_freq(c);
+	amd_log_skinit(c);
 }
 
 const struct cpu_dev __initconst_cf_clobber amd_cpu_dev = {
