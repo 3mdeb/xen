@@ -5,6 +5,7 @@
  */
 
 #include <xen/compiler.h>
+#include <xen/efi.h>
 #include <xen/init.h>
 #include <xen/macros.h>
 #include <xen/mm.h>
@@ -245,10 +246,23 @@ check_drtm_policy(const struct slr_table *slrt,
 {
     uint32_t i;
     uint32_t num_mod_entries;
+    int min_entries;
 
-    if ( policy->nr_entries < 2 )
-        panic("DRTM policy in SLRT contains less than 2 entries (%d)!\n",
-              policy->nr_entries);
+    min_entries = efi_enabled(EFI_BOOT) ? 1 : 2;
+    if ( policy->nr_entries < min_entries )
+    {
+        panic("DRTM policy in SLRT contains less than %d entries (%d)!\n",
+              min_entries, policy->nr_entries);
+    }
+
+    if ( efi_enabled(EFI_BOOT) )
+    {
+        check_slrt_policy_entry(&policy_entry[0], 0, slrt);
+        /* SLRT was measured in tpm_measure_slrt(). */
+        return 1;
+    }
+
+    /* This must be legacy MultiBoot2 boot. */
 
     /*
      * MBI policy entry must be the first one, so that measuring order matches
@@ -269,10 +283,10 @@ check_drtm_policy(const struct slr_table *slrt,
         uint16_t j;
         const struct boot_module *mod = &bi->mods[i];
 
-        if (mod->relocated || mod->released)
+        if (mod->arch.relocated || mod->arch.released)
         {
             panic("Multiboot module \"%s\" (at %d) was consumed before measurement\n",
-                  (const char *)__va(mod->cmdline_pa), i);
+                  (const char *)__va(mod->arch.cmdline_pa), i);
         }
 
         for ( j = 2; j < policy->nr_entries; j++ )
@@ -288,7 +302,7 @@ check_drtm_policy(const struct slr_table *slrt,
         if ( j >= policy->nr_entries )
         {
             panic("Couldn't find Multiboot module \"%s\" (at %d) in DRTM of Secure Launch\n",
-                  (const char *)__va(mod->cmdline_pa), i);
+                  (const char *)__va(mod->arch.cmdline_pa), i);
         }
     }
 
@@ -317,6 +331,7 @@ void __init slaunch_process_drtm_policy(const struct boot_info *bi)
     const struct slr_table *slrt;
     const struct slr_entry_policy *policy;
     struct slr_policy_entry *policy_entry;
+    int rc;
     uint16_t i;
     unsigned int measured;
 
@@ -331,7 +346,6 @@ void __init slaunch_process_drtm_policy(const struct boot_info *bi)
 
     for ( i = measured; i < policy->nr_entries; i++ )
     {
-        int rc;
         uint64_t start = policy_entry[i].entity;
         uint64_t size = policy_entry[i].size;
 
@@ -375,6 +389,58 @@ void __init slaunch_process_drtm_policy(const struct boot_info *bi)
                                 TPM_EVENT_INFO_LENGTH));
 
         policy_entry[i].flags |= SLR_POLICY_FLAG_MEASURED;
+    }
+
+    /*
+     * On x86 EFI platforms Xen reads its command-line options and kernel/initrd
+     * from configuration files (several can be chained). Bootloader can't know
+     * contents of the configuration beforehand without parsing it, so there
+     * will be no corresponding policy entries. Instead, measure command-line
+     * and all modules here.
+     */
+    if ( efi_enabled(EFI_BOOT) )
+    {
+#define LOG_DATA(str) (uint8_t *)(str), (sizeof(str) - 1)
+
+        tpm_hash_extend(DRTM_LOC, DRTM_DATA_PCR,
+                        (const uint8_t *)bi->cmdline, strlen(bi->cmdline),
+                        DLE_EVTYPE_SLAUNCH, LOG_DATA("Xen's command line"));
+
+        for ( i = 0; i < bi->nr_modules; i++ )
+        {
+            const struct boot_module *mod = &bi->mods[i];
+
+            paddr_t string = mod->arch.cmdline_pa;
+            paddr_t start = mod->start;
+            size_t size = mod->size;
+
+            if ( mod->arch.relocated || mod->arch.released )
+            {
+                panic("A module \"%s\" (#%d) was consumed before measurement\n",
+                      (const char *)__va(string), i);
+            }
+
+            /*
+             * Measuring module's name separately because module's command-line
+             * parameters are appended to its name when present.
+             *
+             * 2 MiB is minimally mapped size and it should more than suffice.
+             */
+            rc = slaunch_map_l2(string, 2 * 1024 * 1024);
+            BUG_ON(rc != 0);
+
+            tpm_hash_extend(DRTM_LOC, DRTM_DATA_PCR,
+                            __va(string), strlen(__va(string)),
+                            DLE_EVTYPE_SLAUNCH, LOG_DATA("MB module string"));
+
+            rc = slaunch_map_l2(start, size);
+            BUG_ON(rc != 0);
+
+            tpm_hash_extend(DRTM_LOC, DRTM_CODE_PCR, __va(start), size,
+                            DLE_EVTYPE_SLAUNCH, LOG_DATA("MB module"));
+        }
+
+#undef LOG_DATA
     }
 }
 

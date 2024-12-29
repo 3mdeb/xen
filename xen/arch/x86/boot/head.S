@@ -397,6 +397,12 @@ slaunch_stub_entry:
         mov     %ebx, %esi
         sub     $sym_offs(slaunch_stub_entry), %esi
 
+#ifdef XEN_BUILD_EFI
+        /* If the flag is already set, then Xen should continue execution. */
+        cmpb    $0, sym_esi(slaunch_active)
+        jne     slaunch_efi_jumpback
+#endif
+
         /* On AMD, %ebp holds the base address of SLB, save it for later. */
         mov     %ebp, %ebx
 
@@ -835,6 +841,124 @@ trampoline_setup:
 
         /* Jump into the relocated trampoline. */
         lret
+
+#ifdef XEN_BUILD_EFI
+
+        /*
+         * The state matches that of slaunch_stub_entry above, but with %esi
+         * already initialized.
+         */
+slaunch_efi_jumpback:
+        lea     STACK_SIZE - CPUINFO_sizeof + sym_esi(cpu0_stack), %esp
+
+        /* Prepare gdt and segments. */
+        add     %esi, sym_esi(gdt_boot_base)
+        lgdt    sym_esi(gdt_boot_descr)
+
+        mov     $BOOT_DS, %ecx
+        mov     %ecx, %ds
+        mov     %ecx, %es
+        mov     %ecx, %ss
+
+        push    $BOOT_CS32
+        lea     sym_esi(.Lgdt_is_set),%edx
+        push    %edx
+        lret
+.Lgdt_is_set:
+
+        /*
+         * Stash TSC as above because it was zeroed on jumping into bootloader
+         * to not interfere with measurements.
+         */
+        rdtsc
+        mov     %eax,     sym_esi(boot_tsc_stamp)
+        mov     %edx, 4 + sym_esi(boot_tsc_stamp)
+
+        /*
+         * Clear the pagetables before the use. We are loaded below 4GiB and
+         * this avoids the need for writing to higher dword of each entry.
+         * Additionally, this ensures those dwords are actually zero and the
+         * mappings aren't manipulated from outside.
+         */
+        lea     sym_esi(bootmap_start), %edi
+        lea     sym_esi(bootmap_end), %ecx
+        sub     %edi, %ecx
+        xor     %eax, %eax
+        shr     $2, %ecx
+        rep stosl
+
+        /* 1x L1 page, 512 entries mapping total of 2M. */
+        lea     sym_esi(l1_bootmap), %edi
+        mov     $512, %ecx
+        mov     $(__PAGE_HYPERVISOR + 512 * PAGE_SIZE), %edx
+.Lfill_l1_identmap:
+        sub     $PAGE_SIZE, %edx
+        /* Loop runs for ecx=[512..1] for entries [511..0], hence -8. */
+        mov     %edx, -8(%edi,%ecx,8)
+        loop    .Lfill_l1_identmap
+
+        /* 4x L2 pages, each page mapping 1G of RAM. */
+        lea     sym_esi(l2_bootmap), %edi
+        /* 1st entry points to L1. */
+        lea     (sym_offs(l1_bootmap) + __PAGE_HYPERVISOR)(%esi), %edx
+        mov     %edx, (%edi)
+        /* Other entries are 2MB pages. */
+        mov     $(4 * 512 - 1), %ecx
+        /*
+         * Value below should be 4GB + flags, which wouldn't fit in 32b
+         * register. To avoid warning from the assembler, 4GB is skipped here.
+         * Substitution in first iteration makes the value roll over and point
+         * to 4GB - 2MB + flags.
+         */
+        mov     $(_PAGE_PSE + __PAGE_HYPERVISOR), %edx
+.Lfill_l2_identmap:
+        sub     $(1 << L2_PAGETABLE_SHIFT), %edx
+        /* Loop runs for ecx=[2047..1] for entries [2047..1]. */
+        mov     %edx, (%edi,%ecx,8)
+        loop    .Lfill_l2_identmap
+
+        /* 1x L3 page, mapping the 4x L2 pages. */
+        lea     sym_esi(l3_bootmap), %edi
+        mov     $4, %ecx
+        lea     (sym_offs(l2_bootmap) + 4 * PAGE_SIZE + __PAGE_HYPERVISOR)(%esi), %edx
+.Lfill_l3_identmap:
+        sub     $PAGE_SIZE, %edx
+        /* Loop runs for ecx=[4..1] for entries [3..0], hence -8. */
+        mov     %edx, -8(%edi,%ecx,8)
+        loop    .Lfill_l3_identmap
+
+        /* 1x L4 page, mapping the L3 page. */
+        lea     (sym_offs(l3_bootmap) + __PAGE_HYPERVISOR)(%esi), %edx
+        mov     %edx, sym_esi(l4_bootmap)
+
+        /* Restore CR4, PAE must be enabled before IA-32e mode */
+        mov     %cr4, %ecx
+        or      $X86_CR4_PAE, %ecx
+        mov     %ecx, %cr4
+
+        /* Load PML4 table location into PT base register */
+        lea     sym_esi(l4_bootmap), %eax
+        mov     %eax, %cr3
+
+        /* Enable IA-32e mode and paging */
+        mov     $MSR_EFER, %ecx
+        rdmsr
+        or      $EFER_LME >> 8, %ah
+        wrmsr
+
+        mov     %cr0, %eax
+        or      $X86_CR0_PG | X86_CR0_NE | X86_CR0_TS | X86_CR0_MP, %eax
+        mov     %eax, %cr0
+
+        /* Now in IA-32e compatibility mode, use lret to jump to 64b mode */
+        lea     sym_esi(start_xen_from_efi), %ecx
+        push    $BOOT_CS64
+        push    %ecx
+        lret
+
+.global start_xen_from_efi
+
+#endif /* XEN_BUILD_EFI */
 
 ENTRY(trampoline_start)
 #include "trampoline.S"

@@ -19,6 +19,7 @@
 
 -doc_begin="Build tools are out of scope."
 -file_tag+={out_of_scope_tools,"^xen/tools/.*$"}
+-file_tag+={out_of_scope_tools,"^xen/arch/x86/efi/fixmlehdr\\.c$"}
 -file_tag+={out_of_scope_tools,"^xen/arch/x86/efi/mkreloc\\.c$"}
 -file_tag+={out_of_scope_tools,"^xen/arch/x86/boot/mkelf32\\.c$"}
 -doc_end

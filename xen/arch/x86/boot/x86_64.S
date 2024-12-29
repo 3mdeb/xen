@@ -227,14 +227,22 @@ GLOBAL(__page_tables_end)
 /* Init pagetables. Enough page directories to map into 4GB. */
         .section .init.data.page_aligned, "aw", @progbits
 
-DATA_LOCAL(l1_bootmap, PAGE_SIZE)
+bootmap_start:
+
+DATA_LOCAL(l1_bootmap, PAGE_SIZE) /* 1x L1 page, mapping 2M of RAM. */
         .fill L1_PAGETABLE_ENTRIES, 8, 0
 END(l1_bootmap)
 
-DATA(l2_bootmap, PAGE_SIZE)
+DATA(l2_bootmap, PAGE_SIZE) /* 4x L2 pages, each mapping 1G of RAM. */
         .fill 4 * L2_PAGETABLE_ENTRIES, 8, 0
 END(l2_bootmap)
 
-DATA(l3_bootmap, PAGE_SIZE)
+DATA(l3_bootmap, PAGE_SIZE) /* 1x L3 page, mapping the 4x L2 pages. */
         .fill L3_PAGETABLE_ENTRIES, 8, 0
 END(l3_bootmap)
+
+DATA_LOCAL(l4_bootmap, PAGE_SIZE) /* 1x L4 page, mapping the L3 page. */
+        .fill L4_PAGETABLE_ENTRIES, 8, 0
+END(l4_bootmap)
+
+bootmap_end:

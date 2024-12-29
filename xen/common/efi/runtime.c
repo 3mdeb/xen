@@ -72,6 +72,7 @@ struct efi __read_mostly efi = {
 	.mps    = EFI_INVALID_TABLE_ADDR,
 	.smbios = EFI_INVALID_TABLE_ADDR,
 	.smbios3 = EFI_INVALID_TABLE_ADDR,
+	.slr    = EFI_INVALID_TABLE_ADDR,
 };
 
 const struct efi_pci_rom *__read_mostly efi_pci_roms;
