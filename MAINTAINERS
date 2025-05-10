@@ -551,6 +551,21 @@ F:	*/configure
 F:	*/*.ac
 F:	tools/
 
+TRENCHBOOT SECURE LAUNCH
+M:	Daniel P. Smith <dpsmith@apertussolutions.com>
+R:	Ross Philipson <ross.philipson@oracle.com>
+R:	Sergii Dmytruk <sergii.dmytruk@3mdeb.com>
+S:	Supported
+F:	xen/arch/x86/boot/slaunch-early.c
+F:	xen/arch/x86/efi/fixmlehdr.c
+F:	xen/arch/x86/include/asm/intel-txt.h
+F:	xen/arch/x86/include/asm/slaunch.h
+F:	xen/arch/x86/include/asm/tpm.h
+F:	xen/arch/x86/intel-txt.c
+F:	xen/arch/x86/slaunch.c
+F:	xen/arch/x86/tpm.c
+F:	xen/include/xen/slr-table.h
+
 VM EVENT, MEM ACCESS and MONITOR
 M:	Tamas K Lengyel <tamas@tklengyel.com>
 R:	Alexandru Isaila <aisaila@bitdefender.com>
