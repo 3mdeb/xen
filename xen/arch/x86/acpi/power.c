@@ -29,6 +29,7 @@
 #include <asm/irq.h>
 #include <asm/microcode.h>
 #include <asm/prot-key.h>
+#include <asm/slaunch.h>
 #include <asm/spec_ctrl.h>
 #include <asm/tboot.h>
 #include <asm/trampoline.h>
@@ -332,6 +333,13 @@ int acpi_enter_sleep(const struct xenpf_enter_acpi_sleep *sleep)
           (PAGE_OFFSET(acpi_sinfo.wakeup_vector) >
            PAGE_SIZE - acpi_sinfo.vector_width / 8)) )
         return -EOPNOTSUPP;
+
+    /* Secure Launch won't initiate DRTM on S3 resume, so abort S3 suspend. */
+    if ( sleep->sleep_state == ACPI_STATE_S3 && slaunch_active )
+    {
+        printk(XENLOG_INFO "SLAUNCH: refusing switching into ACPI S3 state.\n");
+        return -EPERM;
+    }
 
     if ( sleep->flags & XENPF_ACPI_SLEEP_EXTENDED )
     {
